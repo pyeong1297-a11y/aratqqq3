@@ -1,0 +1,16 @@
+{
+  "name": "aratqqq3-backtester",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CLI backtester for TQQQ, BULZ, and ISA KODEX strategies.",
+  "type": "module",
+  "scripts": {
+    "fetch-data": "node src/fetch-data.js all",
+    "help": "node src/cli.js --help",
+    "check-data": "node src/cli.js check-data all",
+    "run": "node src/cli.js run all",
+    "run:tqqq": "node src/cli.js run us-tqqq",
+    "run:bulz": "node src/cli.js run us-bulz",
+    "run:isa": "node src/cli.js run isa-kodex"
+  }
+}
