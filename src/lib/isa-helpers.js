@@ -124,7 +124,10 @@ export function buildSignalSeries(signalBars, signalMode) {
     const close = bar.adjClose;
     const sma200Value = sma200[index];
     const sma220Value = sma220[index];
+    const has200 = sma200Value !== null;
     const hasBoth = sma200Value !== null && sma220Value !== null;
+    const below200 = has200 && close < sma200Value;
+    const above200 = has200 && close > sma200Value;
     const belowBoth = hasBoth && close < sma200Value && close < sma220Value;
     const aboveEarlyLine = hasBoth && close > Math.min(sma200Value, sma220Value);
     const above220Line = sma220Value !== null && close > sma220Value;
@@ -146,12 +149,32 @@ export function buildSignalSeries(signalBars, signalMode) {
       }
 
       if (!invested) {
-        if (belowBoth) {
+        if (
+          (signalMode.mode === "sma200-entry" && below200) ||
+          (signalMode.mode !== "sma200-entry" && belowBoth)
+        ) {
           armed = true;
           breakoutCount = 0;
         }
 
-        if (signalMode.mode === "dual-both-entry") {
+        if (signalMode.mode === "sma200-entry") {
+          if (armed && above200) {
+            breakoutCount += 1;
+          } else if (armed && !below200) {
+            breakoutCount = 0;
+          }
+
+          if (
+            armed &&
+            signalMode.confirmationDays > 0 &&
+            breakoutCount >= signalMode.confirmationDays
+          ) {
+            invested = true;
+            armed = false;
+            breakoutCount = 0;
+            protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
+          }
+        } else if (signalMode.mode === "dual-both-entry") {
           if (armed && above220Line) {
             breakoutCount += 1;
           } else if (armed && !belowBoth) {

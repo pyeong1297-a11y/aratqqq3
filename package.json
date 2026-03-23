@@ -2,7 +2,7 @@
   "name": "aratqqq3-backtester",
   "version": "0.1.0",
   "private": true,
-  "description": "CLI backtester for TQQQ, BULZ, and ISA KODEX strategies.",
+  "description": "Backtesting toolkit for TQQQ, BULZ, and ISA-based KODEX Nasdaq 100 leveraged strategies.",
   "type": "module",
   "scripts": {
     "fetch-data": "node src/fetch-data.js all",
@@ -11,6 +11,9 @@
     "run": "node src/cli.js run all",
     "run:tqqq": "node src/cli.js run us-tqqq",
     "run:bulz": "node src/cli.js run us-bulz",
-    "run:isa": "node src/cli.js run isa-kodex"
+    "run:isa": "node src/cli.js run isa-kodex --save results/isa-kodex-latest.json",
+    "run:isa:console": "node src/cli.js run isa-kodex",
+    "app": "node app.js",
+    "app:export": "node app.js --export-static"
   }
 }
