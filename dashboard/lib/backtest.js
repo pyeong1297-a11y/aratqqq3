@@ -539,6 +539,9 @@ export function runSnowballStrategy({
       cash += amt;
       events.push({ date, type: 'dc-exit', price: tPrice, amount: amt, profit });
       tqqqShares = 0; tqqqCost = 0;
+      tpBaseShares = 0;
+      tp1Done = false;
+      tp2Done = false;
       cooldownUntilIndex = i + cooldownDays;
       tp3LockActive = false;
       hasGoldCrossSinceDeadCross = false;
@@ -552,13 +555,16 @@ export function runSnowballStrategy({
         cash += amt;
         events.push({ date, type: 'tp3', price: tPrice, amount: amt, profit });
         tqqqShares = 0; tqqqCost = 0;
+        tpBaseShares = 0;
+        tp1Done = false;
+        tp2Done = false;
         tp3LockActive = true;
         dip1Consumed = false; dip2Consumed = false; bonusConsumed = false;
       }
     }
 
     // 2. Profit Taking
-    if (tqqqShares > 0) {
+    if (tqqqShares > 0 && !hasGoldCrossSinceDeadCross) {
       const avgCost = tqqqCost / tqqqShares;
       const gain = (tPrice - avgCost) / avgCost;
       if (!tp1Done && gain >= tp1Threshold) {

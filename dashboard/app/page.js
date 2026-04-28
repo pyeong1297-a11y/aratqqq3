@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import styles from './page.module.css';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Legend,
+  Tooltip, ResponsiveContainer, Legend,
   ComposedChart, Line, LineChart
 } from 'recharts';
 import { 
@@ -243,15 +243,6 @@ export default function Dashboard() {
     updateParam('profitTakeSteps', params.profitTakeSteps.filter((_, i) => i !== idx));
   };
 
-  // Build MDD curve for chart
-  const mddCurve = result?.equityCurve ? (() => {
-    let peak = -Infinity;
-    return result.equityCurve.map(p => {
-      if (p.value > peak) peak = p.value;
-      const dd = peak > 0 ? (p.value - peak) / peak : 0;
-      return { date: p.date, mdd: dd * 100 };
-    });
-  })() : [];
 
   const marketStatus = result?.events?.some(e => e.type === 'status-holding') ? '투자중' : '대기';
 
@@ -719,34 +710,6 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Drawdown Chart */}
-                  <div className={styles.chartPanel}>
-                    <div className={styles.panelHeader}>
-                      <h3 className={styles.panelTitle}>최대 낙폭 (MDD)</h3>
-                    </div>
-                    <div className={styles.panelBody}>
-                      <ResponsiveContainer width="100%" height={180}>
-                        <AreaChart data={mddCurve} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="colorMdd" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2}/>
-                              <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                          <XAxis dataKey="date" tickFormatter={d => d?.slice(0,4)} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} minTickGap={30} />
-                          <YAxis tickFormatter={v => `${v.toFixed(0)}%`} tick={{ fill: '#64748b', fontSize: 12 }} axisLine={false} tickLine={false} width={40} />
-                          <Tooltip
-                            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                            formatter={v => [`${v.toFixed(2)}%`, '낙폭']}
-                            labelStyle={{ color: '#0f172a', fontWeight: 'bold' }}
-                          />
-                          <ReferenceLine y={0} stroke="#cbd5e1" />
-                          <Area type="monotone" dataKey="mdd" stroke="#ef4444" strokeWidth={2} fill="url(#colorMdd)" dot={false} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Current Status Cards */}
