@@ -741,7 +741,7 @@ export default function Dashboard() {
                       )}
                       {statusSgov && (
                         <div className={styles.statusCard} style={{ borderColor: '#3b82f6' }}>
-                          <div className={styles.statusCardLabel}>💵 SGOV 주차 중</div>
+                          <div className={styles.statusCardLabel}>💵 {statusSgov.asset || 'SGOV'} 주차 중</div>
                           <div className={styles.statusCardRow}>
                             <span>평가금액</span>
                             <strong>{fmtUSD(statusSgov.amount)}</strong>
@@ -817,6 +817,8 @@ export default function Dashboard() {
                                 : ev.type.startsWith('tp')  ? `익절 ${ev.type.replace('tp', 'TP')}`
                                 : ev.type === 'exit'        ? 'MA 이탈 (청산)'
                                 : ev.type === 'stoploss'    ? '스탑로스 (청산)'
+                                : ev.type === 'parking-init' ? `${ev.parkingAsset || 'SGOV'} 초기 매수`
+                                : ev.type === 'contribution' ? `${ev.parkingAsset || 'SGOV'} 적립`
                                 : ev.type}
                               </span>
                             </td>
@@ -824,6 +826,8 @@ export default function Dashboard() {
                             <td className={styles.tdDetail}>
                               {ev.amount  != null && !ev.type.startsWith('tp') ? <span>{fmtUSD(ev.amount)} 매수 </span> : ''}
                               {ev.proceeds != null ? <span>{fmtUSD(ev.proceeds)} 매도 </span> : ''}
+                              {ev.parkingAmount != null && ev.parkingAmount > 0 ? <span>{fmtUSD(ev.parkingAmount)} {ev.parkingAsset || 'SGOV'} 주차 </span> : ''}
+                              {ev.profitAmount != null && ev.profitAmount > 0 ? <span>{fmtUSD(ev.profitAmount)} {ev.profitAsset || 'SPYM'} 이동 </span> : ''}
                               {ev.gain    != null ? (
                                 <span className={ev.gain >= 0 ? styles.textGreen : styles.textRed}>
                                   {ev.gain >= 0 ? '+' : ''}{(ev.gain * 100).toFixed(2)}%
@@ -832,6 +836,8 @@ export default function Dashboard() {
                             </td>
                             <td className={styles.tdExtra}>
                               {ev.refPrice != null ? `기준가 $${ev.refPrice.toFixed(2)}` : ''}
+                              {ev.fundingAsset ? `${ev.refPrice != null ? ' / ' : ''}${ev.fundingAsset} 매도 후 진입` : ''}
+                              {!ev.fundingAsset && ev.parkingAsset && (ev.type === 'parking-init' || ev.type === 'contribution') ? `${ev.parkingAsset} 보유 시작` : ''}
                               {ev.drawdown != null ? `MDD ${(ev.drawdown * 100).toFixed(1)}%` : ''}
                             </td>
                           </tr>

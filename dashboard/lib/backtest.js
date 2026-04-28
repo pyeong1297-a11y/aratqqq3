@@ -32,6 +32,7 @@ export function runTrendStrategy({
   tradeBars,      // [{ date, adjClose }] (Execution)
   parkingBars,    // SGOV
   profitBars,     // SPYM (for profit taking parking)
+  primaryParkingStartDate = '',
   confirmDays = 3,
   confirmDays2 = 4,
   smaPeriod = 200,
@@ -103,6 +104,9 @@ export function runTrendStrategy({
     }
     return dateBars[ans]?.adjClose || 1;
   }
+  function getParkingAsset(date) {
+    return primaryParkingStartDate && date < primaryParkingStartDate ? 'BIL' : 'SGOV';
+  }
 
   const actTradeBars = tradeBars || bars;
   const tradeDates = actTradeBars.map(b => b.date);
@@ -135,6 +139,13 @@ export function runTrendStrategy({
       lastContributionMonth = currentMonth;
       lastContributionYear = currentYear;
       hasInitialized = true;
+      events.push({
+        date,
+        type: 'parking-init',
+        price: sgov,
+        amount: initialCapital,
+        parkingAsset: getParkingAsset(date),
+      });
     } else {
       // Monthly DCA Logic
       if (monthlyDCA > 0 && currentMonth !== lastContributionMonth) {
@@ -159,7 +170,13 @@ export function runTrendStrategy({
           // Also update B&H comparison
           bnhShares += amountToContribute / buyP(tradeP);
           
-          events.push({ date, type: 'contribution', amount: amountToContribute });
+          events.push({
+            date,
+            type: 'contribution',
+            price: sgov,
+            amount: amountToContribute,
+            parkingAsset: getParkingAsset(date),
+          });
         }
         lastContributionMonth = currentMonth;
       }
@@ -184,19 +201,32 @@ export function runTrendStrategy({
     }
 
     if (inPosition && (!aboveMA || triggeredStopLoss)) {
+      let totalParkingProceeds = 0;
       if (riskShares > 0) {
         const proceeds = riskShares * sellP(tradeP);
         sgovShares += proceeds / buyP(sgov);
         sgovCostBasis += proceeds;
+        totalParkingProceeds += proceeds;
         const exitReason = triggeredStopLoss ? 'stoploss' : 'exit';
-        events.push({ date, type: exitReason, price: tradeP });
+        events.push({
+          date,
+          type: exitReason,
+          price: tradeP,
+          proceeds,
+          parkingAmount: proceeds,
+          parkingAsset: getParkingAsset(date),
+        });
         riskShares = 0;
       }
       if (profitShares > 0) {
         const proceeds = profitShares * sellP(spym);
         sgovShares += proceeds / buyP(sgov);
         sgovCostBasis += proceeds;
+        totalParkingProceeds += proceeds;
         profitShares = 0;
+      }
+      if (totalParkingProceeds > 0 && events.length > 0) {
+        events[events.length - 1].parkingAmount = totalParkingProceeds;
       }
       inPosition = false;
       half1Done = false;
@@ -236,7 +266,17 @@ export function runTrendStrategy({
 
             riskShares -= sell;
             tpDone[t] = true;
-            events.push({ date, type: `tp${t + 1}`, price: tradeP, gain, proceeds });
+            events.push({
+              date,
+              type: `tp${t + 1}`,
+              price: tradeP,
+              gain,
+              proceeds,
+              parkingAmount: sgovProceeds > 0 ? sgovProceeds : 0,
+              parkingAsset: getParkingAsset(date),
+              profitAmount: spymProceeds > 0 ? spymProceeds : 0,
+              profitAsset: profitBars?.length > 0 ? 'SPYM' : getParkingAsset(date),
+            });
           }
         }
       }
@@ -256,7 +296,13 @@ export function runTrendStrategy({
           signalRefPrice = signalPrice;
           inPosition = true;
           tpDone.fill(false);
-          events.push({ date, type: 'entry', price: tradeP });
+          events.push({
+            date,
+            type: 'entry',
+            price: tradeP,
+            amount: totalVal,
+            fundingAsset: getParkingAsset(date),
+          });
         }
       }
     } else {
@@ -276,7 +322,13 @@ export function runTrendStrategy({
           half1Done = true;
           inPosition = true;
           tpDone.fill(false);
-          events.push({ date, type: 'entry-half1', price: tradeP });
+          events.push({
+            date,
+            type: 'entry-half1',
+            price: tradeP,
+            amount: half,
+            fundingAsset: getParkingAsset(date),
+          });
         }
       } else if (inPosition && half1Done && entry2Price === null && streak === day2) {
         const totalVal = sgovShares * sellP(sgov);
@@ -292,7 +344,14 @@ export function runTrendStrategy({
           signalRefPrice = splitRefMode === 'max'
             ? Math.max(signalEntry1Price, signalEntry2Price)
             : signalEntry2Price;
-          events.push({ date, type: 'entry-half2', price: tradeP, refPrice });
+          events.push({
+            date,
+            type: 'entry-half2',
+            price: tradeP,
+            amount: totalVal,
+            refPrice,
+            fundingAsset: getParkingAsset(date),
+          });
         }
       } else if (inPosition && half1Done && entry2Price === null && !aboveMA) {
         // streak reset during split: cancel
@@ -333,6 +392,7 @@ export function runTrendStrategy({
         amount: sgovVal,
         interest: sgovInterest,
         costBasis: sgovCostBasis,
+        asset: getParkingAsset(lastDate),
       });
     }
     if (profitShares > 0) {

@@ -38,6 +38,7 @@ export async function POST(req) {
         tradeBars,
         parkingBars,
         profitBars: spymBars,
+        primaryParkingStartDate: sgovBars[0]?.date || '',
         confirmDays: parseInt(params.confirmDays ?? 3),
         confirmDays2: parseInt(params.confirmDays2 ?? (parseInt(params.confirmDays ?? 3) + 1)),
         smaPeriod: 200,
