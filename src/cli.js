@@ -6,23 +6,18 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { DEFAULTS, STRATEGIES, TAX_MODES, getRequiredFiles } from "./config.js";
 import { checkRequiredDataFiles } from "./lib/data-check.js";
 import { loadRequiredData } from "./lib/data-loader.js";
-import {
-  buildSingleIsaContributionSchedule,
-  resolveBenchmarkKodexTradePrice,
-  resolveBenchmarkUsOpenTradePrice,
-  runSingleAssetDcaBenchmark
-} from "./lib/dca-benchmark.js";
-import { buildQqqReturnMap } from "./lib/isa-helpers.js";
 import { runIsaStrategy } from "./lib/isa-strategy.js";
 import { formatMetricValue, printScenarioTable, printStrategyBlock } from "./lib/report.js";
+import { runSnowballStrategy } from "./lib/snowball-strategy.js";
 import { runUsStrategy } from "./lib/us-strategy.js";
+import { runUsQldStrategy } from "./lib/us-qld-strategy.js";
 
 function parseArgs(argv) {
   const positional = [];
   const options = {};
 
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
     if (!token.startsWith("--")) {
       positional.push(token);
       continue;
@@ -36,14 +31,14 @@ function parseArgs(argv) {
       continue;
     }
 
-    const next = argv[i + 1];
+    const next = argv[index + 1];
     if (!next || next.startsWith("--")) {
       options[key] = true;
       continue;
     }
 
     options[key] = next;
-    i += 1;
+    index += 1;
   }
 
   return { positional, options };
@@ -57,6 +52,13 @@ function printHelp() {
 Strategies
 
   us-tqqq
+  us-tqqq-growth
+  us-tqqq-balance
+  us-tqqq-defense
+  us-snowball-basic
+  us-snowball-optimized
+  us-snowball-optimized-sgov
+  us-snowball-optimized-defensive
   us-bulz
   isa-kodex
   all
@@ -65,8 +67,12 @@ Options
 
   --data-dir <path>         Data directory (default: ./data)
   --initial-capital <num>   Starting capital
-                            US default: 100000000
+                            US default: strategy plan
                             ISA default first contribution: 10000000
+  --monthly-contribution <num>
+                            Monthly contribution amount
+                            US default: strategy plan
+                            ISA default: strategy plan
   --json                    Print JSON payload
   --save <path>             Save JSON payload
   --help                    Show help
@@ -74,9 +80,14 @@ Options
 Examples
 
   node src/cli.js run us-tqqq
-  node src/cli.js run all --data-dir .\\data --json
+  node src/cli.js run us-tqqq-growth
+  node src/cli.js run us-snowball-basic
+  node src/cli.js run us-snowball-optimized
+  node src/cli.js run us-snowball-optimized-sgov
+  node src/cli.js run us-snowball-optimized-defensive
+  node src/cli.js run us-bulz
   node src/cli.js run isa-kodex
-  node src/cli.js run isa-kodex --initial-capital 15000000
+  node src/cli.js run all --data-dir .\\data --json
   node src/cli.js check-data all
 `);
 }
@@ -124,8 +135,20 @@ async function runStrategy(strategyName, options, cwd) {
   const datasets = await loadRequiredData(dataDir, requiredFiles);
 
   if (strategy.type === "us") {
-    const initialCapital = parseNumberOption(options["initial-capital"], DEFAULTS.initialCapital);
-    const scenarioResults = [];
+    const initialCapital = parseNumberOption(
+      options["initial-capital"],
+      strategy.contributionPlan?.initialContribution ?? DEFAULTS.initialCapital
+    );
+    const monthlyContribution = parseNumberOption(
+      options["monthly-contribution"],
+      strategy.contributionPlan?.legacyMonthlyContribution ?? 0
+    );
+    const contributionPlan = {
+      initialContribution: initialCapital,
+      legacyMonthlyContribution: monthlyContribution
+    };
+    const scenarios = [];
+
     for (const scenario of strategy.slippageScenarios) {
       for (const taxMode of TAX_MODES) {
         const result = runUsStrategy({
@@ -133,16 +156,20 @@ async function runStrategy(strategyName, options, cwd) {
           riskBars: datasets[strategy.riskSymbol],
           spymBars: datasets.spym,
           sgovBars: datasets.sgov,
-          fxBars: datasets.usdkrw,
+          parkingFallbackBars: datasets.bil || null,
+          fxBars: datasets.usdkrw || null,
           initialCapital,
+          contributionPlan,
           confirmationDays: strategy.confirmationDays,
           feeRate: strategy.feeRate,
           slippageRate: scenario.slippageRate,
           profitTakeSteps: strategy.profitTakeSteps,
+          profitTakeParking: strategy.profitTakeParking,
+          valuationCurrency: strategy.valuationCurrency,
           taxMode: taxMode.id
         });
         result.meta.scenarioLabel = `${scenario.label} / ${taxMode.label}`;
-        scenarioResults.push(result);
+        scenarios.push(result);
       }
     }
 
@@ -151,8 +178,96 @@ async function runStrategy(strategyName, options, cwd) {
       label: strategy.label,
       type: strategy.type,
       initialCapital,
+      contributionPlan,
       requiredFiles,
-      scenarios: scenarioResults
+      scenarios
+    };
+  }
+
+  if (strategy.type === "snowball-us") {
+    const initialCapital = parseNumberOption(
+      options["initial-capital"],
+      strategy.contributionPlan?.initialContribution ?? DEFAULTS.initialCapital
+    );
+    const monthlyContribution = parseNumberOption(
+      options["monthly-contribution"],
+      strategy.contributionPlan?.legacyMonthlyContribution ?? 0
+    );
+    const contributionPlan = {
+      initialContribution: initialCapital,
+      legacyMonthlyContribution: monthlyContribution
+    };
+    const scenarios = [];
+
+    for (const scenario of strategy.executionScenarios) {
+      for (const taxMode of TAX_MODES) {
+        const result = runSnowballStrategy({
+          name: strategy.name,
+          qqqBars: datasets[strategy.signalSymbol],
+          riskBars: datasets[strategy.riskSymbol],
+          sgovBars: datasets.sgov || null,
+          parkingFallbackBars: datasets.bil || null,
+          initialCapital,
+          contributionPlan,
+          feeRate: strategy.feeRate,
+          annualCashYield: strategy.annualCashYield,
+          slippagePerShare: scenario.slippagePerShare,
+          valuationCurrency: strategy.valuationCurrency,
+          taxMode: taxMode.id,
+          settings: strategy.settings
+        });
+        result.meta.scenarioLabel = `${scenario.label} / ${taxMode.label}`;
+        scenarios.push(result);
+      }
+    }
+
+    return {
+      strategy: strategyName,
+      label: strategy.label,
+      type: strategy.type,
+      initialCapital,
+      contributionPlan,
+      requiredFiles,
+      scenarios
+    };
+  }
+
+  if (strategy.type === "us-qld") {
+    const initialCapital = parseNumberOption(
+      options["initial-capital"],
+      strategy.contributionPlan?.initialContribution ?? DEFAULTS.initialCapital
+    );
+    const scenarios = [];
+
+    for (const signalMode of strategy.signalModes) {
+      for (const taxMode of TAX_MODES) {
+        if (taxMode.id === "taxed") continue; // We only want pre-tax for now or we just run both but user asked for pre-tax 
+        // We will run both since taxMode covers both, the print logic will show it.
+        const result = runUsQldStrategy({
+          name: strategy.name,
+          signalBars: datasets.tqqq,
+          qqqBars: datasets.qqq,
+          qldBars: datasets.qld,
+          spymBars: datasets.spym,
+          sgovBars: datasets.sgov,
+          initialCapital,
+          signalMode,
+          feeRate: strategy.feeRate,
+          annualCashYield: strategy.annualCashYield,
+        });
+        result.meta.scenarioLabel = `${signalMode.label} / ${taxMode.label}`;
+        scenarios.push(result);
+      }
+    }
+
+    return {
+      strategy: strategyName,
+      label: strategy.label,
+      type: strategy.type,
+      initialCapital,
+      contributionPlan: strategy.contributionPlan,
+      requiredFiles,
+      scenarios
     };
   }
 
@@ -160,26 +275,23 @@ async function runStrategy(strategyName, options, cwd) {
     options["initial-capital"],
     strategy.contributionPlan?.initialContribution ?? DEFAULTS.initialCapital
   );
-  const isaContributionPlan = {
+  const contributionPlan = {
     ...strategy.contributionPlan,
-    initialContribution: initialCapital
+    initialContribution: initialCapital,
+    legacyMonthlyContribution: parseNumberOption(
+      options["monthly-contribution"],
+      strategy.contributionPlan?.legacyMonthlyContribution
+    )
   };
-  const signalModes = strategy.signalModes || [
-    { id: "default", label: "Default", mode: "dual-min-entry", confirmationDays: 3 }
-  ];
-  const allocationModes = strategy.allocationModes || [
-    { id: "direct", label: "No envelope", envelopePct: null }
-  ];
   const bulzStrategy = STRATEGIES["us-bulz"];
   const bulzBaseScenario =
     bulzStrategy.slippageScenarios.find((item) => item.id === "base") ||
     bulzStrategy.slippageScenarios[0];
+  const scenarios = [];
 
-  const scenarioResults = [];
-  for (const signalMode of signalModes) {
-    for (const allocationMode of allocationModes) {
-      for (const scenario of strategy.executionScenarios) {
-        for (const taxMode of TAX_MODES) {
+  for (const signalMode of strategy.signalModes) {
+    for (const scenario of strategy.executionScenarios) {
+      for (const taxMode of TAX_MODES) {
         const result = runIsaStrategy({
           name: strategy.name,
           signalBars: datasets.tqqq,
@@ -189,87 +301,21 @@ async function runStrategy(strategyName, options, cwd) {
           riskBars: datasets.bulz,
           spymBars: datasets.spym,
           sgovBars: datasets.sgov,
-            fxBars: datasets.usdkrw,
+          fxBars: datasets.usdkrw,
           initialCapital,
-            signalMode,
+          signalMode,
           scenario,
-          allocationMode,
           feeRate: strategy.feeRate,
           annualCashYield: strategy.annualCashYield,
           taxMode: taxMode.id,
-          contributionPlan: isaContributionPlan,
+          contributionPlan,
           bulzStrategy,
           usSlippageRate: bulzBaseScenario.slippageRate
         });
-          result.meta.scenarioLabel = `${signalMode.label} / ${scenario.label} / ${taxMode.label}`;
-          scenarioResults.push(result);
-        }
+        result.meta.scenarioLabel = `${signalMode.label} / ${scenario.label} / ${taxMode.label}`;
+        scenarios.push(result);
       }
     }
-  }
-
-  const benchmarkScenario =
-    strategy.executionScenarios.find((item) => item.id === "base") || strategy.executionScenarios[0];
-  const benchmarkStartDate =
-    datasets.kodex[0].date > datasets.qld[0].date ? datasets.kodex[0].date : datasets.qld[0].date;
-  const benchmarkEndDate =
-    datasets.kodex[datasets.kodex.length - 1].date < datasets.qld[datasets.qld.length - 1].date
-      ? datasets.kodex[datasets.kodex.length - 1].date
-      : datasets.qld[datasets.qld.length - 1].date;
-  const benchmarkKodexBars = datasets.kodex.filter(
-    (bar) => bar.date >= benchmarkStartDate && bar.date <= benchmarkEndDate
-  );
-  const benchmarkQldBars = datasets.qld.filter(
-    (bar) => bar.date >= benchmarkStartDate && bar.date <= benchmarkEndDate
-  );
-  const singleIsaContributionPlan = {
-    initialContribution: isaContributionPlan.initialContribution,
-    legacyMonthlyContribution: isaContributionPlan.legacyMonthlyContribution
-  };
-  const benchmarkSchedule = buildSingleIsaContributionSchedule(
-    benchmarkKodexBars.map((bar) => bar.date),
-    singleIsaContributionPlan
-  );
-  const qqqReturnMap = buildQqqReturnMap(datasets.qqq);
-
-  for (const taxMode of TAX_MODES) {
-    scenarioResults.push(
-      runSingleAssetDcaBenchmark({
-        name: strategy.name,
-        label: `Benchmark / Single ISA KODEX DCA / ${taxMode.label}`,
-        bars: benchmarkKodexBars,
-        contributionSchedule: benchmarkSchedule,
-        feeRate: strategy.feeRate,
-        taxMode: taxMode.id,
-        taxKind: "isa",
-        principalLabel: "kodex",
-        tradePriceResolver: ({ bar, index }) =>
-          resolveBenchmarkKodexTradePrice({
-            bar,
-            index,
-            bars: benchmarkKodexBars,
-            qqqReturnMap,
-            scenario: benchmarkScenario
-          })
-      })
-    );
-    scenarioResults.push(
-      runSingleAssetDcaBenchmark({
-        name: strategy.name,
-        label: `Benchmark / QLD DCA / ${taxMode.label}`,
-        bars: benchmarkQldBars,
-        contributionSchedule: benchmarkSchedule,
-        feeRate: bulzStrategy.feeRate,
-        taxMode: taxMode.id,
-        taxKind: "us",
-        principalLabel: "qld",
-        tradePriceResolver: ({ bar }) =>
-          resolveBenchmarkUsOpenTradePrice({
-            bar,
-            slippageRate: bulzBaseScenario.slippageRate
-          })
-      })
-    );
   }
 
   return {
@@ -278,7 +324,7 @@ async function runStrategy(strategyName, options, cwd) {
     type: strategy.type,
     initialCapital,
     requiredFiles,
-    scenarios: scenarioResults
+    scenarios
   };
 }
 
@@ -294,7 +340,7 @@ function printResultSummary(result) {
     trades: formatMetricValue("count", scenario.metrics.tradeCount),
     winRate: formatMetricValue("percent", scenario.metrics.winRate),
     exposure: formatMetricValue("percent", scenario.metrics.marketExposure),
-    ending: formatMetricValue("currency", scenario.metrics.endingValue)
+    ending: formatMetricValue("currency", scenario.metrics.endingValue, scenario.meta.currency)
   }));
 
   printScenarioTable(rows);
@@ -345,7 +391,7 @@ async function main() {
   }
 
   if (!strategyName) {
-    throw new Error("Strategy name is required. Example: us-tqqq");
+    throw new Error("Strategy name is required. Example: us-bulz");
   }
 
   const runList = buildRunList(strategyName);

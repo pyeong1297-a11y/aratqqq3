@@ -1,44 +1,47 @@
-# 검증 체크리스트
+# Validation Checklist
 
-## 1. 데이터
+## Data
 
-- 필요한 CSV가 모두 존재하는가
-- 날짜가 오름차순으로 정렬되는가
-- 중복 날짜가 없는가
-- `TQQQ`, `BULZ`, `QQQ`, `SGOV`, `SPYM`, `USDKRW`, `KODEX`, `TIGER 미국S&P500`, `QLD`가 필요한 전략에서 빠지지 않는가
+- Required CSV files exist for the selected strategy
+- Dates are sorted ascending
+- There are no duplicate dates
+- Direct `TQQQ` runs require `TQQQ`, `SPYM`, `SGOV`, `BIL`
+- `us-snowball-basic` requires `QQQ`, `TQQQ`
+- Direct `BULZ` runs require `BULZ`, `SPYM`, `SGOV`
+- ISA runs additionally require `QQQ`, `USDKRW`, `TIGER 418660`, `TIGER US S&P500`
 
-## 2. 신호
+## Signals
 
-- `close > SMA`, `close < SMA` 조건이 의도대로 들어갔는가
-- `Early`와 `Strict`의 진입 전제 조건이 서로 다르게 구현됐는가
-- `Strict`의 10거래일 `SMA220` 완충이 실제로 진입 직후에만 적용되는가
-- 롱온리 모드에서 타이밍 신호가 무시되는가
+- `close > SMA` and `close < SMA` conditions are applied exactly
+- `us-tqqq` variants use `SMA200` with 3-day confirmation
+- `us-bulz` uses `SMA200` with 2-day confirmation
+- `us-snowball-basic` uses `QQQ` 52-week drawdown bands, `TQQQ RSI14`, and `TQQQ 5/220` crossovers
+- `dual-strict` only arms after both `SMA200` and `SMA220` are broken
+- `dual-strict` uses the 10-session `SMA220` whipsaw rule only right after entry
 
-## 3. ISA 현금흐름
+## Currency
 
-- 시작 납입금 `1,000만원`
-- 매달 21일 `60만원`
-- 해지 가능 시점 이후 `TQQQ > SMA200`이면 해지 연기
-- 해지 후 즉시 재가입 `2,000만원`
-- 다음 해부터 매년 1월 2일 `2,000만원`
-- SGOV 내부이체와 외부 신규자금 보충이 둘 다 계산되는가
+- Direct US strategies are valued in `USD`
+- Direct US strategies do not multiply portfolio value by `USDKRW`
+- ISA remains KRW-based
 
-## 4. 체결
+## Profit Take
 
-- 미국 전략은 미국 당일 종가 + 슬리피지 가정인지
-- ISA는 미국 신호 뒤 다음 한국 거래일 체결인지
-- ISA 기준/보수적 시나리오에서 한국 시가가 맞게 적용되는지
+- `us-tqqq-growth`: `100/50 200/100`
+- `us-tqqq-balance`: `50/20 100/50 200/100`
+- `us-tqqq-defense`: `10/10 25/10 50/10 100/50 200/50 300/50`
+- `us-snowball-basic`: `+15/50 +68/35 +350/full`
+- `us-bulz`: `100/full -> SGOV`
+- ISA shared 3-step PT: `50/33` then `120/75` then `150/full`
 
-## 5. 비용과 세금
+## Costs And Taxes
 
-- 미국 수수료 `0.25%`
-- ISA 수수료 `0.015%`
-- 미국 세금 `250만원 공제 후 22%`
-- ISA 세금 `400만원 공제 후 9.9%`
+- Direct US fee: `0.25%`
+- ISA fee: `0.015%`
+- Direct US taxed scenario uses account-currency taxation units
+- ISA taxed scenario remains KRW-based
 
-## 6. 결과 해석
+## Interpretation
 
-- ETF 가격 CAGR과 포트폴리오 NAV CAGR을 혼동하지 않았는가
-- 세전과 세후를 따로 비교했는가
-- CAGR뿐 아니라 `MDD`, `거래 수`, `승률`, `노출 비중`도 같이 보는가
-- 벤치마크와 비교 구간이 동일한가
+- Compare `CAGR`, `MDD`, `trade count`, `win rate`, and `exposure` together
+- Do not compare direct US USD results against ISA KRW results without normalizing first

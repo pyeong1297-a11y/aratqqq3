@@ -1,129 +1,188 @@
-# 전략 명세
+# Strategy Notes
 
-## 1. 공통 원칙
+## Final Scope
 
-- 신호 기준선은 미국 종목의 `종가`입니다.
-- 이동평균은 `SMA200`, `SMA220`를 사용합니다.
-- `close > SMA`는 상방, `close < SMA`는 하방으로 해석합니다.
-- 동률은 추세 전환으로 취급하지 않습니다.
+The runtime now keeps only these strategies or modes:
 
-## 2. 미국 전략
+- `us-tqqq`
+- `us-tqqq-growth`
+- `us-tqqq-balance`
+- `us-tqqq-defense`
+- `us-snowball-basic`
+- `us-bulz`
+- `isa-kodex / pure-200-3d`
+- `isa-kodex / dual-strict`
 
-### TQQQ
+## Direct US Valuation
 
-- 신호 자산 = 실행 자산: `TQQQ`
-- 진입: `close > SMA200` 3거래일 연속
-- 청산: `close < SMA200`
-- 비진입 자금: `SGOV`
-- 중간 이익실현:
-  - `+50%`: 20% 매도 후 `SPYM`
-  - `+100%`, `+200%`, `+300%`: 각 단계에서 남은 위험자산의 50% 매도 후 `SPYM`
+Direct US strategies are valued in `USD`.
 
-### BULZ
+- initial capital is interpreted in `USD`
+- monthly contribution is interpreted in `USD`
+- portfolio value does not multiply by `USDKRW`
+- if monthly contribution is enabled, cycle-on deposits buy `SPYM`
+- if monthly contribution is enabled, risk-off deposits buy `SGOV` or fallback `BIL`
 
-- 신호 자산 = 실행 자산: `BULZ`
-- 진입: `close > SMA200` 2거래일 연속
-- 청산: `close < SMA200`
-- 중간 이익실현, `SPYM`, `SGOV` 규칙은 TQQQ와 동일
+## `us-tqqq`
 
-## 3. ISA 전략
+- Asset: `TQQQ`
+- Entry: `close > SMA200` for 3 consecutive US sessions
+- Exit: `close < SMA200`
+- Profit take: none
+- Risk-off parking: `SGOV`, with `BIL` fallback before `SGOV` inception
 
-### 3.1 기본 구조
+Current reference result:
 
-- 신호 자산: `TQQQ`
-- 한국 레버리지 실행 자산: `KODEX 미국나스닥100레버리지(H)`
-- 위험 구간 추가 납입 자산: `TIGER 미국S&P500`
-- 현금성 대기자산: 연 3.5% 고정 이자 가정
+- period: `2010-02-11 ~ 2026-04-02`
+- base / no tax
+- ending value: `$4,631,933`
+- total return: `4545.83%`
+- CAGR: `26.85%`
+- MDD: `-48.76%`
 
-### 3.2 계좌 생애주기
+## `us-tqqq-growth`
 
-- 백테스트 시작 시점의 기존 ISA는 이미 1년 보유 중이라고 가정
-- 시작 납입금: `1,000만원`
-- 기존 ISA 월 납입: 매달 `21일` `60만원`
-- 시작 후 2년 뒤부터 해지 가능
-- 단, 그 시점에도 `TQQQ close > SMA200`이면 해지 연기
-- 이후 `TQQQ close <= SMA200`가 확인된 다음 한국 거래일에 해지
-- 해지 직후 새 ISA 재가입
-- 새 ISA 즉시 납입: `2,000만원`
-- 다음 해부터 매년 `1월 2일` `2,000만원` 납입
-- 새 ISA 누적 한도: `1억원`
+- base rule: same as `us-tqqq`
+- profit-take parking: `SPYM`
+- steps:
+  - `+100% @ 50%`
+  - `+200% @ 100%`
 
-### 3.3 해지 후 자금 처리
+Current reference result:
 
-- 해지된 기존 ISA의 세후 자금은 USD 슬리브로 이동
-- 첫 미국 거래일에 BULZ 전략으로 연결
-- BULZ 비진입 상태면 `SGOV`에 대기
-- 연초 ISA 납입 시점에 `SGOV` 자금이 있으면 우선 내부이체로 사용
-- 부족한 금액만 외부 신규자금으로 보충
+- period: `2010-02-11 ~ 2026-04-02`
+- base / no tax
+- ending value: `$5,825,158`
+- total return: `5742.64%`
+- CAGR: `28.67%`
+- MDD: `-43.47%`
 
-### 3.4 현재 기본 비교 모드
+## `us-tqqq-balance`
 
-#### Early
+- base rule: same as `us-tqqq`
+- profit-take parking: `SPYM`
+- steps:
+  - `+50% @ 20%`
+  - `+100% @ 50%`
+  - `+200% @ 100%`
 
-- 진입 전제: 한동안 `SMA200`, `SMA220` 둘 다 아래
-- 진입: `min(SMA200, SMA220)` 위에서 3거래일 연속 마감
-- 청산: `close < SMA200`
+Current reference result:
 
-#### Strict
+- period: `2010-02-11 ~ 2026-04-02`
+- base / no tax
+- ending value: `$5,757,342`
+- total return: `5674.62%`
+- CAGR: `28.58%`
+- MDD: `-40.72%`
 
-- 진입 전제: 한동안 `SMA200`, `SMA220` 둘 다 아래
-- 진입: `SMA220` 위 3거래일 이상 + 마지막 날 종가가 `SMA200` 위
-- 청산: 기본은 `close < SMA200`
-- 완충: 진입 후 첫 10거래일은 `SMA220` 이탈 시에만 청산
+## `us-tqqq-defense`
 
-#### Long-only
+- base rule: same as `us-tqqq`
+- profit-take parking: `SPYM`
+- steps:
+  - `+10% @ 10%`
+  - `+25% @ 10%`
+  - `+50% @ 10%`
+  - `+100% @ 50%`
+  - `+200% @ 50%`
+  - `+300% @ 50%`
 
-- ISA를 하나의 계좌로 끝까지 유지
-- 롤오버 없음
-- ISA로 들어오는 돈은 모두 레버리지 KODEX 매수
+Current reference result:
 
-### 3.5 장기 적립 벤치마크
+- period: `2010-02-11 ~ 2026-04-02`
+- base / no tax
+- ending value: `$4,390,682`
+- total return: `4303.86%`
+- CAGR: `26.43%`
+- MDD: `-38.72%`
 
-- 단일 ISA KODEX 적립
-- 같은 현금흐름의 `QLD` 적립
+## `us-snowball-basic`
 
-## 4. 체결 가정
+- signal asset: `QQQ`
+- execution asset: `TQQQ`
+- signal reference: `QQQ` adjusted-close drawdown vs rolling `252`-session adjusted high
+- dip buys:
+  - `-10%`: target `20%` portfolio weight
+  - `-22%`: target `70%` portfolio weight
+  - `RSI14 <= 35`: add `10%` target weight on top of the active dip band
+- profit takes:
+  - `+15%`: sell `50%` of base shares
+  - `+68%`: sell `35%` of base shares
+  - `+350%`: full exit
+- trend follow:
+  - `TQQQ 5DMA > 220DMA`: invest remaining cash
+  - `TQQQ 5DMA < 220DMA`: full exit
+  - cooldown: `5` trading days after dead cross
+- idle cash yield: `4.5%`
 
-### 미국 전략
+Current reference result:
 
-- 신호 확인과 체결을 같은 미국 거래일 종가 기준으로 모델링
-- 슬리피지는 종가 대비 불리하게 반영
-- 수수료: 매수/매도 각각 `0.25%`
+- period: `2010-02-11 ~ 2026-04-02`
+- base / no tax
+- ending value: `$55,831,585`
+- total return: `55731.59%`
+- CAGR: `47.99%`
+- MDD: `-53.11%`
 
-슬리피지 시나리오:
+## `us-bulz`
 
-- 낙관적: `0.00%`
-- 기준: `0.05%`
-- 보수적: `0.10%`
-- 스트레스: `0.20%`
+- Asset: `BULZ`
+- Entry: `close > SMA200` for 2 consecutive US sessions
+- Exit: `close < SMA200`
+- Profit take: `+100%` full exit
+- Profit-take parking: `SGOV`
 
-### ISA 전략
+Current reference result:
 
-- 미국 신호가 확정된 뒤 다음 한국 거래일에 체결
-- 수수료: `0.015%`
+- period: `2021-08-18 ~ 2026-04-02`
+- base / no tax
+- ending value: `$834,260`
+- total return: `736.76%`
+- CAGR: `58.35%`
+- MDD: `-35.03%`
 
-시나리오:
+## ISA Wrapper
 
-- 낙관적: KODEX 공정가치 체결
-- 기준: 다음 한국 거래일 시가
-- 보수적: 다음 한국 거래일 시가 + 매수/매도 0.5% 불리한 슬리피지
+ISA remains KRW-based.
 
-## 5. 세금 가정
+- signal asset: `TQQQ`
+- execution asset: `TIGER US Nasdaq100 Leverage (418660)`
+- defensive parking inside ISA: synthetic cash with `3.5%` annual yield
+- profit-take destination: `TIGER US S&P500`
 
-### 미국
+Shared ISA profit take:
 
-- 연간 실현손익 기준
-- 기본공제 `250만원`
-- 초과분 `22%`
+- `+50%`: sell `33%` into `TIGER US S&P500`
+- `+120%`: sell `75%` of remaining into `TIGER US S&P500`
+- `+150%`: sell all remaining into `TIGER US S&P500`
 
-### ISA
+### `pure-200-3d`
 
-- 종료 시점 총 이익 기준
-- 기본공제 `400만원`
-- 초과분 `9.9%`
+- arm when `TQQQ close < SMA200`
+- enter after `TQQQ close > SMA200` for 3 consecutive US sessions
+- exit on `TQQQ close < SMA200`
 
-## 6. 결과 해석 시 주의점
+Current reference result:
 
-- `ETF 자체 5년 CAGR`과 `같은 날짜에 계속 돈을 넣은 DCA 포트폴리오 CAGR`은 다른 지표입니다.
-- 특히 `QLD` 같은 2배 레버리지는 가격 CAGR보다 DCA NAV CAGR이 훨씬 낮게 나올 수 있습니다.
-- 현재 ISA 리포트의 핵심 평가는 `총자산 기준`입니다.
+- period: `2021-08-18 ~ 2026-04-02`
+- base / no tax
+- ending value: `166,521,703 KRW`
+- total return: `312.45%`
+- CAGR: `35.88%`
+- MDD: `-29.31%`
+
+### `dual-strict`
+
+- arm only after `TQQQ close < SMA200` and `close < SMA220`
+- enter after `TQQQ close > SMA220` for 3 consecutive sessions and the last close is above `SMA200`
+- default exit on `TQQQ close < SMA200`
+- for the first 10 sessions after entry, only an `SMA220` break can force exit
+
+Current reference result:
+
+- period: `2021-08-18 ~ 2026-04-02`
+- base / no tax
+- ending value: `186,039,407 KRW`
+- total return: `390.58%`
+- CAGR: `41.08%`
+- MDD: `-28.63%`

@@ -153,6 +153,49 @@ export function exitIsaRiskPosition({
   };
 }
 
+export function takeIsaProfitIntoSp500({
+  account,
+  row,
+  prevKodexBar,
+  qqqReturn,
+  scenario,
+  feeRate,
+  sellFraction
+}) {
+  if (account.kodexShares <= 0 || sellFraction <= 0) {
+    return null;
+  }
+
+  const boundedSellFraction = Math.min(Math.max(sellFraction, 0), 1);
+  const sharesToSell = account.kodexShares * boundedSellFraction;
+  if (sharesToSell <= 0) {
+    return null;
+  }
+
+  const kodexTradePrice = resolveKodexTradePrice({
+    mode: scenario.mode,
+    tradeSide: "sell",
+    kodexBar: row.kodex,
+    prevKodexBar,
+    qqqReturn,
+    slipRate: scenario.slipRate
+  });
+  const kodexSale = sellShares(sharesToSell, kodexTradePrice, feeRate, 0);
+  const sp500TradePrice = resolveSp500TradePrice(row, "buy", scenario);
+  const sp500Buy = buyWithCash(kodexSale.proceeds, sp500TradePrice, feeRate, 0);
+
+  account.kodexShares -= sharesToSell;
+  account.sp500Shares += sp500Buy.shares;
+
+  return {
+    kodexTradePrice,
+    sp500TradePrice,
+    soldShares: sharesToSell,
+    boughtShares: sp500Buy.shares,
+    proceeds: kodexSale.proceeds
+  };
+}
+
 export function applyIsaContribution({
   account,
   amount,

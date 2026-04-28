@@ -13,35 +13,30 @@ const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0 Safari/537.36";
 
 const US_SERIES = [
-  { id: "tqqq", sourceSymbol: "tqqq.us", output: "us/tqqq.csv" },
-  { id: "bulz", sourceSymbol: "bulz.us", output: "us/bulz.csv" },
-  { id: "spym", sourceSymbol: "spym.us", output: "us/spym.csv" },
-  { id: "sgov", sourceSymbol: "sgov.us", output: "us/sgov.csv" },
-  { id: "qqq", sourceSymbol: "qqq.us", output: "us/qqq.csv" },
-  { id: "qld", sourceSymbol: "qld.us", output: "us/qld.csv" }
+  { id: "tqqq", yahooSymbol: "TQQQ", output: "us/tqqq.csv" },
+  { id: "qld", yahooSymbol: "QLD", output: "us/qld.csv" },
+  { id: "bulz", yahooSymbol: "BULZ", output: "us/bulz.csv" },
+  { id: "spym", yahooSymbol: "SPYM", output: "us/spym.csv" },
+  { id: "sgov", yahooSymbol: "SGOV", output: "us/sgov.csv" },
+  { id: "bil", yahooSymbol: "BIL", output: "us/bil.csv" },
+  { id: "qqq", yahooSymbol: "QQQ", output: "us/qqq.csv" }
 ];
 
 const KR_SERIES = [
   {
-    id: "kodex",
-    shortCode: "409820",
-    isuCd: "KR7409820008",
-    name: "KODEX 미국나스닥100레버리지(합성 H)",
-    output: "kr/kodex_nasdaq100_lev_h.csv"
+    id: "tiger-nasdaq100-lev",
+    shortCode: "418660",
+    output: "kr/tiger_us_nasdaq100_lev.csv"
+  },
+  {
+    id: "ace-bigtech-top7-plus-lev",
+    shortCode: "465610",
+    output: "kr/ace_us_bigtech_top7_plus_lev.csv"
   },
   {
     id: "tiger-sp500",
     shortCode: "360750",
-    isuCd: "KR7360750004",
-    name: "TIGER 미국S&P500",
     output: "kr/tiger_us_sp500.csv"
-  },
-  {
-    id: "tiger-nasdaq100",
-    shortCode: "133690",
-    isuCd: "KR7133690008",
-    name: "TIGER 미국나스닥100",
-    output: "kr/tiger_us_nasdaq100.csv"
   }
 ];
 
@@ -78,24 +73,18 @@ function parseArgs(argv) {
 }
 
 function printHelp() {
-  console.log(`사용법
-
+  console.log(`Usage
   node src/fetch-data.js all [options]
   node src/fetch-data.js us [options]
   node src/fetch-data.js kr [options]
   node src/fetch-data.js fx [options]
 
-옵션
-
-  --data-dir <path>   저장 폴더 (기본값: ./data)
-  --start <date>      시작일 (기본값: 2000-01-01)
-  --end <date>        종료일 (기본값: 오늘)
-  --help              도움말 출력
+Options
+  --data-dir <path>   Data directory (default: ./data)
+  --start <date>      Start date (default: 2000-01-01)
+  --end <date>        End date (default: today)
+  --help              Show help
 `);
-}
-
-function compactDate(isoDate) {
-  return String(isoDate).replace(/-/g, "");
 }
 
 function splitCsvLine(line) {
@@ -158,7 +147,7 @@ async function fetchText(url, init = {}) {
   });
 
   if (!response.ok) {
-    throw new Error(`요청 실패: ${response.status} ${response.statusText} / ${url}`);
+    throw new Error(`Request failed: ${response.status} ${response.statusText} / ${url}`);
   }
 
   return response.text();
@@ -170,93 +159,109 @@ async function fetchJson(url, init = {}) {
 }
 
 function parseNumber(raw) {
-  const value = String(raw || "").trim().replace(/,/g, "");
+  const value = String(raw ?? "").trim().replace(/,/g, "");
   if (!value || value === "." || value === "-") {
     return null;
   }
+
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-async function fetchUsSeries(item, startDate) {
-  const url = `https://stooq.com/q/d/l/?s=${encodeURIComponent(item.sourceSymbol)}&i=d`;
-  const text = await fetchText(url);
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+function toUnixSeconds(date, endOfDay = false) {
+  const suffix = endOfDay ? "T23:59:59Z" : "T00:00:00Z";
+  return Math.floor(new Date(`${date}${suffix}`).getTime() / 1000);
+}
 
-  if (lines.length < 2) {
-    throw new Error(`${item.id}: 응답이 비어 있습니다.`);
+async function fetchUsSeries(item, startDate, endDate) {
+  const period1 = toUnixSeconds(startDate, false);
+  const period2 = toUnixSeconds(endDate, true);
+  const url =
+    `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(item.yahooSymbol)}` +
+    `?period1=${period1}&period2=${period2}&interval=1d&includeAdjustedClose=true&events=div%2Csplits`;
+  const payload = await fetchJson(url);
+  const result = payload?.chart?.result?.[0];
+
+  if (!result || payload?.chart?.error) {
+    throw new Error(`${item.id}: Yahoo chart response is empty or invalid.`);
   }
 
+  const timestamps = result.timestamp || [];
+  const quote = result.indicators?.quote?.[0] || {};
+  const adjCloseSeries = result.indicators?.adjclose?.[0]?.adjclose || [];
   const rows = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const [date, open, high, low, close, volume] = splitCsvLine(lines[i]);
-    if (!date || date < startDate) {
+
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const date = new Date(timestamps[i] * 1000).toISOString().slice(0, 10);
+    if (date < startDate || date > endDate) {
       continue;
     }
 
-    const closeValue = parseNumber(close);
+    const closeValue = parseNumber(quote.close?.[i]);
     if (closeValue === null) {
       continue;
     }
 
     rows.push({
       date,
-      open: parseNumber(open) ?? closeValue,
-      high: parseNumber(high) ?? closeValue,
-      low: parseNumber(low) ?? closeValue,
+      open: parseNumber(quote.open?.[i]) ?? closeValue,
+      high: parseNumber(quote.high?.[i]) ?? closeValue,
+      low: parseNumber(quote.low?.[i]) ?? closeValue,
       close: closeValue,
-      adjClose: closeValue,
-      volume: parseNumber(volume) ?? 0
+      adjClose: parseNumber(adjCloseSeries[i]) ?? closeValue,
+      volume: parseNumber(quote.volume?.[i]) ?? 0
     });
   }
 
   if (rows.length === 0) {
-    throw new Error(`${item.id}: 내려받은 데이터가 없습니다.`);
+    throw new Error(`${item.id}: no price rows returned from Yahoo chart API.`);
   }
 
   return rows;
 }
 
 async function fetchFxSeries(startDate, endDate) {
-  const url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=DEXKOUS";
-  const text = await fetchText(url);
-  const lines = text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const period1 = toUnixSeconds(startDate, false);
+  const period2 = toUnixSeconds(endDate, true);
+  const url =
+    "https://query1.finance.yahoo.com/v8/finance/chart/KRW%3DX" +
+    `?period1=${period1}&period2=${period2}&interval=1d&includeAdjustedClose=true`;
+  const payload = await fetchJson(url);
+  const result = payload?.chart?.result?.[0];
 
-  if (lines.length < 2) {
-    throw new Error("USDKRW: 응답이 비어 있습니다.");
+  if (!result || payload?.chart?.error) {
+    throw new Error("USDKRW: Yahoo chart response is empty or invalid.");
   }
 
+  const timestamps = result.timestamp || [];
+  const quote = result.indicators?.quote?.[0] || {};
+  const adjCloseSeries = result.indicators?.adjclose?.[0]?.adjclose || [];
   const rows = [];
-  for (let i = 1; i < lines.length; i += 1) {
-    const [date, close] = splitCsvLine(lines[i]);
-    if (!date || date < startDate || date > endDate) {
+
+  for (let i = 0; i < timestamps.length; i += 1) {
+    const date = new Date(timestamps[i] * 1000).toISOString().slice(0, 10);
+    if (date < startDate || date > endDate) {
       continue;
     }
 
-    const closeValue = parseNumber(close);
+    const closeValue = parseNumber(quote.close?.[i]);
     if (closeValue === null) {
       continue;
     }
 
     rows.push({
       date,
-      open: closeValue,
-      high: closeValue,
-      low: closeValue,
+      open: parseNumber(quote.open?.[i]) ?? closeValue,
+      high: parseNumber(quote.high?.[i]) ?? closeValue,
+      low: parseNumber(quote.low?.[i]) ?? closeValue,
       close: closeValue,
-      adjClose: closeValue,
+      adjClose: parseNumber(adjCloseSeries[i]) ?? closeValue,
       volume: 0
     });
   }
 
   if (rows.length === 0) {
-    throw new Error("USDKRW: 내려받은 데이터가 없습니다.");
+    throw new Error("USDKRW: no rows returned from Yahoo chart API.");
   }
 
   return rows;
@@ -274,7 +279,7 @@ async function fetchKrxSeries(item, startDate, endDate) {
 
   const matches = [...xmlText.matchAll(/<item\s+data="([^"]+)"/g)];
   if (matches.length === 0) {
-    throw new Error(`${item.id}: 네이버 일봉 데이터가 비어 있습니다.`);
+    throw new Error(`${item.id}: empty Naver chart response.`);
   }
 
   const rows = [];
@@ -307,32 +312,32 @@ async function fetchKrxSeries(item, startDate, endDate) {
   }
 
   if (rows.length === 0) {
-    throw new Error(`${item.id}: 네이버 일봉 필터 결과가 비어 있습니다.`);
+    throw new Error(`${item.id}: no rows returned from Naver chart API.`);
   }
 
-  rows.sort((a, b) => a.date.localeCompare(b.date));
+  rows.sort((left, right) => left.date.localeCompare(right.date));
   return rows;
 }
 
-async function downloadUs(baseDir, startDate) {
+async function downloadUs(baseDir, startDate, endDate) {
   for (const item of US_SERIES) {
-    const rows = await fetchUsSeries(item, startDate);
+    const rows = await fetchUsSeries(item, startDate, endDate);
     const saved = await writePriceCsv(baseDir, item.output, rows);
-    console.log(`저장 완료: ${saved} (${rows.length}행)`);
+    console.log(`Saved: ${saved} (${rows.length} rows)`);
   }
 }
 
 async function downloadFx(baseDir, startDate, endDate) {
   const rows = await fetchFxSeries(startDate, endDate);
   const saved = await writePriceCsv(baseDir, "fx/usdkrw.csv", rows);
-  console.log(`저장 완료: ${saved} (${rows.length}행)`);
+  console.log(`Saved: ${saved} (${rows.length} rows)`);
 }
 
 async function downloadKr(baseDir, startDate, endDate) {
   for (const item of KR_SERIES) {
     const rows = await fetchKrxSeries(item, startDate, endDate);
     const saved = await writePriceCsv(baseDir, item.output, rows);
-    console.log(`저장 완료: ${saved} (${rows.length}행)`);
+    console.log(`Saved: ${saved} (${rows.length} rows)`);
   }
 }
 
@@ -351,11 +356,11 @@ async function main() {
   const dataDir = path.resolve(cwd, options["data-dir"] || DEFAULTS.dataDir);
 
   if (!["all", "us", "kr", "fx"].includes(target)) {
-    throw new Error(`지원하지 않는 대상입니다: ${target}`);
+    throw new Error(`Unsupported target: ${target}`);
   }
 
   if (target === "all" || target === "us") {
-    await downloadUs(dataDir, startDate);
+    await downloadUs(dataDir, startDate, endDate);
   }
   if (target === "all" || target === "fx") {
     await downloadFx(dataDir, startDate, endDate);
@@ -366,6 +371,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`오류: ${error.message}`);
+  console.error(`Error: ${error.message}`);
   process.exitCode = 1;
 });

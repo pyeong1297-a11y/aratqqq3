@@ -76,14 +76,14 @@ export function buildSyntheticCashBars(kodexBars, annualCashYield) {
   const bars = [];
   let lastClose = 100;
 
-  for (let i = 0; i < kodexBars.length; i += 1) {
-    const days = i === 0 ? 0 : dayDiff(kodexBars[i - 1].date, kodexBars[i].date);
+  for (let index = 0; index < kodexBars.length; index += 1) {
+    const days = index === 0 ? 0 : dayDiff(kodexBars[index - 1].date, kodexBars[index].date);
     const growth = Math.pow(1 + annualCashYield, days / 365.2425);
     const open = lastClose;
-    const close = i === 0 ? lastClose : lastClose * growth;
+    const close = index === 0 ? lastClose : lastClose * growth;
 
     bars.push({
-      date: kodexBars[i].date,
+      date: kodexBars[index].date,
       open,
       high: Math.max(open, close),
       low: Math.min(open, close),
@@ -125,98 +125,84 @@ export function buildSignalSeries(signalBars, signalMode) {
     const sma200Value = sma200[index];
     const sma220Value = sma220[index];
     const has200 = sma200Value !== null;
-    const hasBoth = sma200Value !== null && sma220Value !== null;
+    const has220 = sma220Value !== null;
     const below200 = has200 && close < sma200Value;
     const above200 = has200 && close > sma200Value;
-    const belowBoth = hasBoth && close < sma200Value && close < sma220Value;
-    const aboveEarlyLine = hasBoth && close > Math.min(sma200Value, sma220Value);
-    const above220Line = sma220Value !== null && close > sma220Value;
+    const below220 = has220 && close < sma220Value;
+    const above220 = has220 && close > sma220Value;
+    const belowBoth = has200 && has220 && below200 && below220;
+    const exitLine =
+      invested &&
+      protectedExitDaysRemaining > 0 &&
+      signalMode.whipsawExitSma === 220 &&
+      has220
+        ? sma220Value
+        : sma200Value;
 
-    if (signalMode.mode === "long-only") {
-      invested = true;
-    } else {
-      const protectedExitActive =
-        protectedExitDaysRemaining > 0 &&
-        signalMode.whipsawExitSma === 220 &&
-        sma220Value !== null;
-      const exitLine = protectedExitActive ? sma220Value : sma200Value;
+    if (invested && exitLine !== null && close < exitLine) {
+      invested = false;
+      armed = signalMode.mode === "dual-both-entry" ? belowBoth : below200;
+      breakoutCount = 0;
+      protectedExitDaysRemaining = 0;
+    }
 
-      if (invested && exitLine !== null && close < exitLine) {
-        invested = false;
-        armed = belowBoth;
-        breakoutCount = 0;
-        protectedExitDaysRemaining = 0;
-      }
-
-      if (!invested) {
-        if (
-          (signalMode.mode === "sma200-entry" && below200) ||
-          (signalMode.mode !== "sma200-entry" && belowBoth)
-        ) {
+    if (!invested) {
+      if (signalMode.mode === "sma200-entry") {
+        if (below200) {
           armed = true;
           breakoutCount = 0;
         }
 
-        if (signalMode.mode === "sma200-entry") {
-          if (armed && above200) {
-            breakoutCount += 1;
-          } else if (armed && !below200) {
-            breakoutCount = 0;
-          }
-
-          if (
-            armed &&
-            signalMode.confirmationDays > 0 &&
-            breakoutCount >= signalMode.confirmationDays
-          ) {
-            invested = true;
-            armed = false;
-            breakoutCount = 0;
-            protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
-          }
-        } else if (signalMode.mode === "dual-both-entry") {
-          if (armed && above220Line) {
-            breakoutCount += 1;
-          } else if (armed && !belowBoth) {
-            breakoutCount = 0;
-          }
-
-          if (
-            armed &&
-            signalMode.confirmationDays > 0 &&
-            breakoutCount >= signalMode.confirmationDays &&
-            sma200Value !== null &&
-            close > sma200Value
-          ) {
-            invested = true;
-            armed = false;
-            breakoutCount = 0;
-            protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
-          }
-        } else {
-          if (armed && aboveEarlyLine) {
-            breakoutCount += 1;
-          } else if (armed && !belowBoth) {
-            breakoutCount = 0;
-          }
-
-          if (
-            armed &&
-            signalMode.confirmationDays > 0 &&
-            breakoutCount >= signalMode.confirmationDays
-          ) {
-            invested = true;
-            armed = false;
-            breakoutCount = 0;
-            protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
-          }
+        if (armed && above200) {
+          breakoutCount += 1;
+        } else if (armed && !below200) {
+          breakoutCount = 0;
         }
+
+        if (
+          armed &&
+          signalMode.confirmationDays > 0 &&
+          breakoutCount >= signalMode.confirmationDays
+        ) {
+          invested = true;
+          armed = false;
+          breakoutCount = 0;
+          protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
+        }
+      } else if (signalMode.mode === "dual-both-entry") {
+        if (belowBoth) {
+          armed = true;
+          breakoutCount = 0;
+        }
+
+        if (armed && above220) {
+          breakoutCount += 1;
+        } else if (armed && !belowBoth) {
+          breakoutCount = 0;
+        }
+
+        if (
+          armed &&
+          signalMode.confirmationDays > 0 &&
+          breakoutCount >= signalMode.confirmationDays &&
+          above200
+        ) {
+          invested = true;
+          armed = false;
+          breakoutCount = 0;
+          protectedExitDaysRemaining = signalMode.whipsawExitDays || 0;
+        }
+      } else {
+        throw new Error(`Unsupported ISA signal mode: ${signalMode.mode}`);
       }
     }
 
     const protectionDaysRemaining = invested ? protectedExitDaysRemaining : 0;
     const exitSmaUsed =
-      invested && protectionDaysRemaining > 0 && signalMode.whipsawExitSma === 220 && sma220Value !== null
+      invested &&
+      protectionDaysRemaining > 0 &&
+      signalMode.whipsawExitSma === 220 &&
+      has220
         ? 220
         : invested
           ? 200
@@ -241,8 +227,8 @@ export function buildSignalSeries(signalBars, signalMode) {
 
 export function buildQqqReturnMap(qqqBars) {
   const map = new Map();
-  for (let i = 1; i < qqqBars.length; i += 1) {
-    map.set(qqqBars[i].date, qqqBars[i].adjClose / qqqBars[i - 1].adjClose - 1);
+  for (let index = 1; index < qqqBars.length; index += 1) {
+    map.set(qqqBars[index].date, qqqBars[index].adjClose / qqqBars[index - 1].adjClose - 1);
   }
   return map;
 }
@@ -259,28 +245,10 @@ export function resolveKodexTradePrice({ mode, tradeSide, kodexBar, prevKodexBar
   return tradeSide === "buy" ? basePrice * (1 + slipRate) : basePrice * (1 - slipRate);
 }
 
-export function resolveContributionTarget(latestSignal, allocationMode) {
+export function resolveContributionTarget(latestSignal) {
   if (!latestSignal || !latestSignal.invested) {
     return "cash";
   }
 
-  if (allocationMode.mode === "always-cash-when-risk-on") {
-    return "cash";
-  }
-
-  if (allocationMode.mode === "risk-on-additions-sp500") {
-    return "sp500";
-  }
-
-  if (allocationMode.mode === "always-risk") {
-    return "kodex";
-  }
-
-  if (allocationMode.envelopePct === null || allocationMode.envelopePct === undefined) {
-    return "kodex";
-  }
-
-  return latestSignal.close <= latestSignal.sma * (1 + allocationMode.envelopePct)
-    ? "kodex"
-    : "cash";
+  return "sp500";
 }

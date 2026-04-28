@@ -1,4 +1,5 @@
 export const US_FOREIGN_BASIC_DEDUCTION_KRW = 2_500_000;
+export const US_FOREIGN_BASIC_DEDUCTION_USD = 2_500;
 export const US_FOREIGN_TAX_RATE = 0.22;
 export const ISA_BASIC_DEDUCTION_KRW = 4_000_000;
 export const ISA_TAX_RATE = 0.099;
@@ -55,8 +56,11 @@ export function reduceTrackerByValue(tracker, removedShares) {
   }
 }
 
-export function computeUsAnnualTax(realizedNetGainKrw) {
-  return Math.max(0, realizedNetGainKrw - US_FOREIGN_BASIC_DEDUCTION_KRW) * US_FOREIGN_TAX_RATE;
+export function computeUsAnnualTax(
+  realizedNetGain,
+  basicDeduction = US_FOREIGN_BASIC_DEDUCTION_KRW
+) {
+  return Math.max(0, realizedNetGain - basicDeduction) * US_FOREIGN_TAX_RATE;
 }
 
 export function computeIsaExitTax(endingValue, principal) {

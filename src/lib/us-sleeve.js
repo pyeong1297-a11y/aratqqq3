@@ -1,4 +1,4 @@
-import { calculateSMA, intersectBars } from "./metrics.js";
+import { calculateSMA } from "./metrics.js";
 import { buyWithCash, positionValue, sellShares } from "./portfolio.js";
 import {
   buyIntoTracker,
@@ -7,6 +7,7 @@ import {
   reduceTrackerByValue,
   sellFromTracker
 } from "./tax.js";
+import { buildAlignedUsTimeline } from "./us-timeline.js";
 
 function yearOf(date) {
   return Number(String(date).slice(0, 4));
@@ -51,6 +52,24 @@ function deductTaxFromPortfolio(engine, amount, prices) {
   return amount - remaining;
 }
 
+function normalizeProfitTakeParking(profitTakeParking) {
+  const raw = profitTakeParking || { spym: 0, sgov: 1 };
+  const weights = {
+    spym: Number.isFinite(raw.spym) ? Math.max(0, raw.spym) : 0,
+    sgov: Number.isFinite(raw.sgov) ? Math.max(0, raw.sgov) : 0
+  };
+  const total = weights.spym + weights.sgov;
+
+  if (total <= 0) {
+    return { spym: 0, sgov: 1 };
+  }
+
+  return {
+    spym: weights.spym / total,
+    sgov: weights.sgov / total
+  };
+}
+
 function closeActiveCycle(engine, trades, row, index) {
   if (!engine.activeCycle) {
     return;
@@ -70,26 +89,27 @@ function closeActiveCycle(engine, trades, row, index) {
 }
 
 export function buildUsTimeline(riskBars, spymBars, sgovBars, fxBars) {
-  return intersectBars({
-    risk: riskBars,
-    spym: spymBars,
-    sgov: sgovBars,
-    fx: fxBars
-  });
+  return buildAlignedUsTimeline(
+    {
+      risk: riskBars,
+      spym: spymBars,
+      sgov: sgovBars
+    },
+    fxBars
+  );
 }
 
 export function createUsSleeve({
   timeline,
-  mode,
   confirmationDays,
   feeRate,
   slippageRate,
   profitTakeSteps,
+  profitTakeParking,
   taxMode
 }) {
   return {
     timeline,
-    mode,
     sma200: calculateSMA(
       timeline.map((row) => row.risk.adjClose),
       200
@@ -98,6 +118,7 @@ export function createUsSleeve({
     feeRate,
     slippageRate,
     profitTakeSteps,
+    profitTakeParking: normalizeProfitTakeParking(profitTakeParking),
     taxMode,
     aboveCount: 0,
     profitTakeCount: 0,
@@ -147,20 +168,15 @@ export function getUsSgovValue(engine, row = engine.lastRow) {
   return positionValue(engine.state.sgovShares, getUsPrices(row).sgovPrice);
 }
 
-export function isUsInvested(engine) {
+function hasRiskExposure(engine) {
   return engine.state.riskShares > 0 || engine.state.spymShares > 0;
 }
 
 export function isUsOut(engine) {
-  return !isUsInvested(engine);
+  return !hasRiskExposure(engine);
 }
 
 export function processUsTradingDate({ engine, row, index, trades, events }) {
-  if (engine.mode === "long-only") {
-    engine.lastRow = row;
-    return;
-  }
-
   const prices = getUsPrices(row);
   const year = yearOf(row.date);
 
@@ -180,13 +196,14 @@ export function processUsTradingDate({ engine, row, index, trades, events }) {
   }
 
   const sma = engine.sma200[index];
-  const invested = isUsInvested(engine);
+  const cycleActive = engine.activeCycle !== null;
+  const invested = hasRiskExposure(engine);
   const above = sma !== null && row.risk.adjClose > sma;
   const below = sma !== null && row.risk.adjClose < sma;
 
   engine.aboveCount = above ? engine.aboveCount + 1 : 0;
 
-  if (invested && below) {
+  if (cycleActive && below) {
     let cash = 0;
 
     if (engine.state.riskShares > 0) {
@@ -219,67 +236,101 @@ export function processUsTradingDate({ engine, row, index, trades, events }) {
       });
     }
 
-    const parking = buyWithCash(cash, prices.sgovPrice, engine.feeRate, engine.slippageRate);
-    engine.state.sgovShares = parking.shares;
-    buyIntoTracker(
-      engine.state.sgovTracker,
-      parking.shares,
-      totalBuyCost(parking.shares, parking.fillPrice, engine.feeRate)
-    );
-    events.push({
-      date: row.date,
-      type: "enter-sgov",
-      price: parking.fillPrice,
-      shares: parking.shares
-    });
+    if (cash > 0) {
+      const parking = buyWithCash(cash, prices.sgovPrice, engine.feeRate, engine.slippageRate);
+      engine.state.sgovShares += parking.shares;
+      buyIntoTracker(
+        engine.state.sgovTracker,
+        parking.shares,
+        totalBuyCost(parking.shares, parking.fillPrice, engine.feeRate)
+      );
+      events.push({
+        date: row.date,
+        type: "enter-sgov",
+        price: parking.fillPrice,
+        shares: parking.shares
+      });
+    }
 
     closeActiveCycle(engine, trades, row, index);
-  } else if (invested && engine.activeCycle) {
+  } else if (invested && cycleActive) {
     for (let stepIndex = 0; stepIndex < engine.profitTakeSteps.length; stepIndex += 1) {
       const step = engine.profitTakeSteps[stepIndex];
       if (engine.activeCycle.profitFlags[stepIndex]) {
         continue;
       }
 
-      if (row.risk.adjClose >= engine.activeCycle.entryPriceUsd * (1 + step.threshold)) {
-        const qty = engine.state.riskShares * step.sellFraction;
-        if (qty <= 0) {
-          engine.activeCycle.profitFlags[stepIndex] = true;
-          continue;
-        }
+      if (row.risk.adjClose < engine.activeCycle.entryPriceUsd * (1 + step.threshold)) {
+        continue;
+      }
 
-        const sale = sellShares(qty, prices.riskPrice, engine.feeRate, engine.slippageRate);
-        const basis = sellFromTracker(engine.state.riskTracker, qty, sale.proceeds);
-        addRealizedGain(engine.realizedByYear, row.date, basis.realizedGain);
-        engine.state.riskShares -= qty;
+      const qty = engine.state.riskShares * step.sellFraction;
+      if (qty <= 0) {
+        engine.activeCycle.profitFlags[stepIndex] = true;
+        continue;
+      }
 
-        const buy = buyWithCash(sale.proceeds, prices.spymPrice, engine.feeRate, engine.slippageRate);
+      const sale = sellShares(qty, prices.riskPrice, engine.feeRate, engine.slippageRate);
+      const basis = sellFromTracker(engine.state.riskTracker, qty, sale.proceeds);
+      addRealizedGain(engine.realizedByYear, row.date, basis.realizedGain);
+      engine.state.riskShares -= qty;
+
+      let spymFill = null;
+      let sgovFill = null;
+
+      const spymCash = sale.proceeds * engine.profitTakeParking.spym;
+      if (spymCash > 0) {
+        const buy = buyWithCash(spymCash, prices.spymPrice, engine.feeRate, engine.slippageRate);
         engine.state.spymShares += buy.shares;
         buyIntoTracker(
           engine.state.spymTracker,
           buy.shares,
           totalBuyCost(buy.shares, buy.fillPrice, engine.feeRate)
         );
-
-        engine.activeCycle.profitFlags[stepIndex] = true;
-        engine.profitTakeCount += 1;
-        events.push({
-          date: row.date,
-          type: "profit-take",
-          threshold: step.threshold,
-          soldShares: qty,
-          riskFill: sale.fillPrice,
-          spymFill: buy.fillPrice
-        });
+        spymFill = buy.fillPrice;
       }
+
+      const sgovCash = sale.proceeds * engine.profitTakeParking.sgov;
+      if (sgovCash > 0) {
+        const buy = buyWithCash(sgovCash, prices.sgovPrice, engine.feeRate, engine.slippageRate);
+        engine.state.sgovShares += buy.shares;
+        buyIntoTracker(
+          engine.state.sgovTracker,
+          buy.shares,
+          totalBuyCost(buy.shares, buy.fillPrice, engine.feeRate)
+        );
+        sgovFill = buy.fillPrice;
+      }
+
+      engine.activeCycle.profitFlags[stepIndex] = true;
+      engine.profitTakeCount += 1;
+      events.push({
+        date: row.date,
+        type: "profit-take",
+        threshold: step.threshold,
+        soldShares: qty,
+        riskFill: sale.fillPrice,
+        spymFill,
+        sgovFill,
+        parkingWeights: engine.profitTakeParking
+      });
     }
-  } else if (!invested && sma !== null && engine.aboveCount >= engine.confirmationDays) {
+  } else if (!cycleActive && sma !== null && engine.aboveCount >= engine.confirmationDays) {
+    if (engine.state.sgovShares <= 0) {
+      engine.lastRow = row;
+      return;
+    }
+
     const sgovSale = sellShares(
       engine.state.sgovShares,
       prices.sgovPrice,
       engine.feeRate,
       engine.slippageRate
     );
+    if (sgovSale.proceeds <= 0) {
+      engine.lastRow = row;
+      return;
+    }
     const basis = sellFromTracker(
       engine.state.sgovTracker,
       engine.state.sgovShares,
@@ -287,7 +338,16 @@ export function processUsTradingDate({ engine, row, index, trades, events }) {
     );
     addRealizedGain(engine.realizedByYear, row.date, basis.realizedGain);
 
-    const riskBuy = buyWithCash(sgovSale.proceeds, prices.riskPrice, engine.feeRate, engine.slippageRate);
+    const riskBuy = buyWithCash(
+      sgovSale.proceeds,
+      prices.riskPrice,
+      engine.feeRate,
+      engine.slippageRate
+    );
+    if (riskBuy.shares <= 0) {
+      engine.lastRow = row;
+      return;
+    }
     engine.state.sgovShares = 0;
     engine.state.riskShares = riskBuy.shares;
     engine.state.spymShares = 0;
@@ -324,7 +384,7 @@ export function depositIntoUsSleeve({ engine, row, index, amountKrw, source, eve
 
   const prices = getUsPrices(row);
 
-  if (engine.mode === "long-only" || isUsInvested(engine)) {
+  if (hasRiskExposure(engine)) {
     const buy = buyWithCash(amountKrw, prices.riskPrice, engine.feeRate, engine.slippageRate);
     engine.state.riskShares += buy.shares;
     buyIntoTracker(
@@ -376,7 +436,7 @@ export function depositIntoUsSleeve({ engine, row, index, amountKrw, source, eve
 }
 
 export function withdrawFromUsSgov({ engine, row, amountKrw, reason, events }) {
-  if (amountKrw <= 0 || isUsInvested(engine)) {
+  if (amountKrw <= 0 || hasRiskExposure(engine)) {
     return 0;
   }
 

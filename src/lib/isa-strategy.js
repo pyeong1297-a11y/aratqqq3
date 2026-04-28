@@ -14,6 +14,7 @@ import {
   findFirstTradingDateOnOrAfter,
   firstMonthlyTargetOnOrAfter,
   nextMonthlyTarget,
+  resolveKodexTradePrice,
   resolveContributionTarget,
   yearOf
 } from "./isa-helpers.js";
@@ -24,7 +25,8 @@ import {
   exitIsaRiskPosition,
   getIsaAccountValue,
   isIsaInRisk,
-  liquidateIsaAccount
+  liquidateIsaAccount,
+  takeIsaProfitIntoSp500
 } from "./isa-portfolio.js";
 import { computeIsaExitTax } from "./tax.js";
 import {
@@ -48,7 +50,15 @@ function getTotalValue(activeIsaAccount, latestKrRow, usEngine, pendingUsTransfe
   return isaValue + getUsValue(usEngine) + pendingUsTransferBalance;
 }
 
-function startIsaCycle(activeIsaAccount, latestKrRow, activeIsaCycle, date, index) {
+function startIsaCycle(
+  activeIsaAccount,
+  latestKrRow,
+  activeIsaCycle,
+  date,
+  index,
+  entryTradePrice,
+  signalEntryPrice
+) {
   if (activeIsaCycle || !activeIsaAccount || !latestKrRow || !isIsaInRisk(activeIsaAccount)) {
     return activeIsaCycle;
   }
@@ -57,7 +67,10 @@ function startIsaCycle(activeIsaAccount, latestKrRow, activeIsaCycle, date, inde
     entryDate: date,
     entryIndex: index,
     startValue: getIsaAccountValue(activeIsaAccount, latestKrRow),
-    contributed: 0
+    contributed: 0,
+    entryTradePrice: entryTradePrice ?? null,
+    signalEntryPrice: signalEntryPrice ?? null,
+    nextIsaProfitTakeIndex: 0
   };
 }
 
@@ -96,6 +109,22 @@ function allocateExternalUnits(navUnits, preNav, externalEndValueToday, totalVal
   return navUnits;
 }
 
+function normalizeIsaProfitTakeSteps(signalMode) {
+  if (!Array.isArray(signalMode?.isaProfitTakeSteps)) {
+    return [];
+  }
+
+  return signalMode.isaProfitTakeSteps
+    .filter((step) => Number.isFinite(step.threshold) && Number.isFinite(step.sellFraction))
+    .map((step) => ({
+      threshold: step.threshold,
+      sellFraction: step.sellFraction,
+      destination: step.destination || "sp500",
+      triggerSource: step.triggerSource || "kodex"
+    }))
+    .sort((left, right) => left.threshold - right.threshold);
+}
+
 export function runIsaStrategy({
   name,
   signalBars,
@@ -109,7 +138,6 @@ export function runIsaStrategy({
   initialCapital,
   signalMode,
   scenario,
-  allocationMode,
   feeRate,
   annualCashYield,
   taxMode,
@@ -142,6 +170,7 @@ export function runIsaStrategy({
   const signalSeries = buildSignalSeries(signalBars, signalMode);
   const signalDates = signalSeries.map((item) => item.date);
   const qqqReturnMap = buildQqqReturnMap(qqqBars);
+  const isaProfitTakeSteps = normalizeIsaProfitTakeSteps(signalMode);
 
   const effectiveContributionPlan = {
     initialContribution: initialCapital,
@@ -158,20 +187,14 @@ export function runIsaStrategy({
         ? contributionPlan.initialContribution
         : initialCapital
   };
-  if (signalMode.mode === "long-only") {
-    effectiveContributionPlan.rolloverYearsFromStart = Number.POSITIVE_INFINITY;
-    effectiveContributionPlan.renewalInitialContribution = 0;
-    effectiveContributionPlan.renewalAnnualContribution = 0;
-    effectiveContributionPlan.renewalContributionLimit = 0;
-  }
 
   const usEngine = createUsSleeve({
     timeline: usTimeline,
-    mode: signalMode.mode === "long-only" ? "long-only" : "timed",
     confirmationDays: bulzStrategy.confirmationDays,
     feeRate: bulzStrategy.feeRate,
     slippageRate: usSlippageRate,
     profitTakeSteps: bulzStrategy.profitTakeSteps,
+    profitTakeParking: bulzStrategy.profitTakeParking,
     taxMode
   });
 
@@ -209,6 +232,7 @@ export function runIsaStrategy({
   let closedIsaNetProceeds = 0;
   let contributionCount = 0;
   let accountCount = 1;
+  let isaProfitTakeCount = 0;
 
   const pendingUsDeposits = new Map();
   const dailyValues = [];
@@ -221,6 +245,7 @@ export function runIsaStrategy({
 
     if (krEntry) {
       let skipIsaEntryToday = false;
+      let isaEntryTradePriceHint = null;
       latestKrRow = krEntry.row;
       const prevKodexBar = krEntry.index > 0 ? krTimeline[krEntry.index - 1].kodex : null;
       const latestSignalIndex = findLatestIndexBefore(signalDates, date);
@@ -228,10 +253,7 @@ export function runIsaStrategy({
       const desiredRisk = latestSignal ? latestSignal.invested : false;
       const qqqReturn = latestSignal ? qqqReturnMap.get(latestSignal.date) ?? 0 : 0;
       const baseContributionTarget = desiredRisk ? "kodex" : "cash";
-      const ongoingContributionTarget =
-        signalMode.mode === "long-only"
-          ? "kodex"
-          : resolveContributionTarget(latestSignal, allocationMode);
+      const ongoingContributionTarget = resolveContributionTarget(latestSignal);
 
       if (activeIsaAccount.phase === "legacy") {
         const shouldCloseLegacy =
@@ -347,6 +369,10 @@ export function runIsaStrategy({
             shares: contribution.shares
           });
 
+          if (contribution.allocation === "kodex" && !activeIsaCycle) {
+            isaEntryTradePriceHint = contribution.tradePrice;
+          }
+
           nextRenewalAnnualTargetDate = findFirstTradingDateOnOrAfter(
             krDates,
             buildFixedDayDate(
@@ -370,6 +396,7 @@ export function runIsaStrategy({
         });
 
         if (entry) {
+          isaEntryTradePriceHint = entry.tradePrice;
           events.push({
             date,
             type: "entry-kodex",
@@ -409,6 +436,76 @@ export function runIsaStrategy({
         }
       }
 
+      if (
+        desiredRisk &&
+        activeIsaCycle &&
+        activeIsaCycle.entryTradePrice > 0 &&
+        activeIsaCycle.nextIsaProfitTakeIndex < isaProfitTakeSteps.length
+      ) {
+        while (activeIsaCycle.nextIsaProfitTakeIndex < isaProfitTakeSteps.length) {
+          const nextStep = isaProfitTakeSteps[activeIsaCycle.nextIsaProfitTakeIndex];
+          if (nextStep.destination !== "sp500" || activeIsaAccount.kodexShares <= 0) {
+            activeIsaCycle.nextIsaProfitTakeIndex += 1;
+            continue;
+          }
+
+          let currentReturn = null;
+          if (nextStep.triggerSource === "signal") {
+            currentReturn =
+              latestSignal && activeIsaCycle.signalEntryPrice > 0
+                ? latestSignal.close / activeIsaCycle.signalEntryPrice - 1
+                : null;
+          } else {
+            const currentKodexTradePrice = resolveKodexTradePrice({
+              mode: scenario.mode,
+              tradeSide: "sell",
+              kodexBar: latestKrRow.kodex,
+              prevKodexBar,
+              qqqReturn,
+              slipRate: scenario.slipRate
+            });
+            currentReturn = currentKodexTradePrice / activeIsaCycle.entryTradePrice - 1;
+          }
+
+          if (currentReturn === null) {
+            break;
+          }
+          if (currentReturn < nextStep.threshold) {
+            break;
+          }
+
+          const profitTake = takeIsaProfitIntoSp500({
+            account: activeIsaAccount,
+            row: latestKrRow,
+            prevKodexBar,
+            qqqReturn,
+            scenario,
+            feeRate,
+            sellFraction: nextStep.sellFraction
+          });
+          activeIsaCycle.nextIsaProfitTakeIndex += 1;
+
+          if (!profitTake) {
+            continue;
+          }
+
+          isaProfitTakeCount += 1;
+          events.push({
+            date,
+            type: "isa-profit-take",
+            accountId: activeIsaAccount.id,
+            threshold: nextStep.threshold,
+            sellFraction: nextStep.sellFraction,
+            triggerSource: nextStep.triggerSource,
+            kodexTradePrice: profitTake.kodexTradePrice,
+            sp500TradePrice: profitTake.sp500TradePrice,
+            soldShares: profitTake.soldShares,
+            boughtShares: profitTake.boughtShares,
+            proceeds: profitTake.proceeds
+          });
+        }
+      }
+
       const preValue = getTotalValue(activeIsaAccount, latestKrRow, usEngine, pendingUsTransferBalance);
       const preNav = navUnits > 0 ? preValue / navUnits : 1;
       let externalEndValueToday = 0;
@@ -442,6 +539,10 @@ export function runIsaStrategy({
           tradePrice: contribution.tradePrice,
           shares: contribution.shares
         });
+
+        if (contribution.allocation === "kodex" && !activeIsaCycle) {
+          isaEntryTradePriceHint = contribution.tradePrice;
+        }
       }
 
       if (activeIsaAccount.phase === "legacy" && nextLegacyContributionDate === date) {
@@ -551,7 +652,15 @@ export function runIsaStrategy({
         );
       }
 
-      activeIsaCycle = startIsaCycle(activeIsaAccount, latestKrRow, activeIsaCycle, date, krEntry.index);
+      activeIsaCycle = startIsaCycle(
+        activeIsaAccount,
+        latestKrRow,
+        activeIsaCycle,
+        date,
+        krEntry.index,
+        isaEntryTradePriceHint ?? latestKrRow.kodex.adjOpen,
+        latestSignal?.close ?? null
+      );
       navUnits = allocateExternalUnits(
         navUnits,
         preNav,
@@ -646,7 +755,9 @@ export function runIsaStrategy({
     accountCount,
     isaGrossContributed,
     internalIsaFunding,
-    profitTakeCount: usEngine.profitTakeCount
+    isaProfitTakeCount,
+    usProfitTakeCount: usEngine.profitTakeCount,
+    profitTakeCount: isaProfitTakeCount + usEngine.profitTakeCount
   };
 
   return {
@@ -661,7 +772,6 @@ export function runIsaStrategy({
       annualCashYield,
       taxMode,
       signalMode,
-      allocationMode,
       contributionPlan: effectiveContributionPlan
     },
     metrics,

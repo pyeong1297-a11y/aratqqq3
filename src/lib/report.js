@@ -6,7 +6,7 @@ function pad(value, width) {
   return `${" ".repeat(width - text.length)}${text}`;
 }
 
-export function formatMetricValue(kind, value) {
+export function formatMetricValue(kind, value, currency = "KRW") {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
   }
@@ -16,6 +16,9 @@ export function formatMetricValue(kind, value) {
   }
 
   if (kind === "currency") {
+    if (currency === "USD") {
+      return `$${Math.round(value).toLocaleString("en-US")}`;
+    }
     return `${Math.round(value).toLocaleString("ko-KR")} KRW`;
   }
 
@@ -73,6 +76,7 @@ export function printScenarioTable(rows) {
 }
 
 export function printStrategyBlock(result) {
+  const currency = result.meta.currency || "KRW";
   console.log("");
   console.log(`[${result.meta.scenarioLabel}]`);
   console.log(`- Period: ${result.meta.startDate} ~ ${result.meta.endDate}`);
@@ -83,7 +87,12 @@ export function printStrategyBlock(result) {
   console.log(`- Win rate: ${formatMetricValue("percent", result.metrics.winRate)}`);
   console.log(`- Avg hold: ${formatMetricValue("days", result.metrics.avgHoldDays)}`);
   console.log(`- Market exposure: ${formatMetricValue("percent", result.metrics.marketExposure)}`);
-  if (result.metrics.profitTakeCount !== undefined) {
+  if (result.metrics.isaProfitTakeCount !== undefined) {
+    console.log(`- ISA profit takes: ${formatMetricValue("count", result.metrics.isaProfitTakeCount)}`);
+  }
+  if (result.metrics.usProfitTakeCount !== undefined) {
+    console.log(`- US profit takes: ${formatMetricValue("count", result.metrics.usProfitTakeCount)}`);
+  } else if (result.metrics.profitTakeCount !== undefined) {
     console.log(`- Profit takes: ${formatMetricValue("count", result.metrics.profitTakeCount)}`);
   }
   if (result.metrics.spymFinalWeight !== undefined) {
@@ -95,26 +104,35 @@ export function printStrategyBlock(result) {
   if (result.metrics.cashHoldingRatio !== undefined) {
     console.log(`- Cash holding ratio: ${formatMetricValue("percent", result.metrics.cashHoldingRatio)}`);
   }
+  if (result.metrics.dipEntryCount !== undefined) {
+    console.log(`- Dip entries: ${formatMetricValue("count", result.metrics.dipEntryCount)}`);
+  }
+  if (result.metrics.gcEntryCount !== undefined) {
+    console.log(`- GC entries: ${formatMetricValue("count", result.metrics.gcEntryCount)}`);
+  }
+  if (result.metrics.dcExitCount !== undefined) {
+    console.log(`- DC exits: ${formatMetricValue("count", result.metrics.dcExitCount)}`);
+  }
   if (result.metrics.annualTaxPaid !== undefined) {
-    console.log(`- US tax paid: ${formatMetricValue("currency", result.metrics.annualTaxPaid)}`);
+    console.log(`- US tax paid: ${formatMetricValue("currency", result.metrics.annualTaxPaid, currency)}`);
   }
   if (result.metrics.exitTaxPaid !== undefined) {
-    console.log(`- ISA exit tax paid: ${formatMetricValue("currency", result.metrics.exitTaxPaid)}`);
+    console.log(`- ISA exit tax paid: ${formatMetricValue("currency", result.metrics.exitTaxPaid, currency)}`);
   }
   if (result.metrics.principalContributed !== undefined) {
-    console.log(`- Principal contributed: ${formatMetricValue("currency", result.metrics.principalContributed)}`);
+    console.log(`- Principal contributed: ${formatMetricValue("currency", result.metrics.principalContributed, currency)}`);
   }
   if (result.metrics.isaGrossContributed !== undefined) {
-    console.log(`- Gross ISA contributions: ${formatMetricValue("currency", result.metrics.isaGrossContributed)}`);
+    console.log(`- Gross ISA contributions: ${formatMetricValue("currency", result.metrics.isaGrossContributed, currency)}`);
   }
   if (result.metrics.internalIsaFunding !== undefined) {
-    console.log(`- Internal SGOV funding to ISA: ${formatMetricValue("currency", result.metrics.internalIsaFunding)}`);
+    console.log(`- Internal SGOV funding to ISA: ${formatMetricValue("currency", result.metrics.internalIsaFunding, currency)}`);
   }
   if (result.metrics.netProfit !== undefined) {
-    console.log(`- Net profit vs contributions: ${formatMetricValue("currency", result.metrics.netProfit)}`);
+    console.log(`- Net profit vs contributions: ${formatMetricValue("currency", result.metrics.netProfit, currency)}`);
   }
   if (result.metrics.settledCash !== undefined) {
-    console.log(`- Closed ISA net proceeds moved to USD: ${formatMetricValue("currency", result.metrics.settledCash)}`);
+    console.log(`- Closed ISA net proceeds moved to USD: ${formatMetricValue("currency", result.metrics.settledCash, currency)}`);
   }
-  console.log(`- Ending value: ${formatMetricValue("currency", result.metrics.endingValue)}`);
+  console.log(`- Ending value: ${formatMetricValue("currency", result.metrics.endingValue, currency)}`);
 }
