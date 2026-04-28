@@ -1,2 +1,7 @@
 * { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; background: #f8fafc; }
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #f8fafc;
+  font-family: "Segoe UI", "Noto Sans KR", Arial, sans-serif;
+}

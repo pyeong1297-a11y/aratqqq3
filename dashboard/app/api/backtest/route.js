@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { loadCSV, loadAndSyncData } from '@/lib/csvLoader';
+import { loadAndSyncData } from '@/lib/csvLoader';
 import { runTrendStrategy, runSnowballStrategy } from '@/lib/backtest';
 
 export async function POST(req) {
   try {
     const body = await req.json();
     const { strategyType, params } = body;
+    const baseUrl = new URL(req.url).origin;
 
     if (strategyType === 'tqqq' || strategyType === 'tqqq_balance' || strategyType === 'bulz' || strategyType === 'isa_qld' || strategyType === 'manual' || strategyType === 'bitu') {
       let signalSymbol = 'tqqq';
@@ -16,11 +17,11 @@ export async function POST(req) {
       else if (strategyType === 'isa_qld') { signalSymbol = 'tqqq'; tradeSymbol = 'qld'; }
       else if (strategyType === 'manual') { signalSymbol = params.symbol || 'tqqq'; tradeSymbol = params.symbol || 'tqqq'; }
       
-      const bars     = await loadAndSyncData(signalSymbol);
-      const tradeBars = await loadAndSyncData(tradeSymbol);
-      const sgovBars = await loadAndSyncData('sgov');
-      const bilBars  = await loadAndSyncData('bil');
-      const spymBars = await loadAndSyncData('spym');
+      const bars     = await loadAndSyncData(signalSymbol, { baseUrl });
+      const tradeBars = await loadAndSyncData(tradeSymbol, { baseUrl });
+      const sgovBars = await loadAndSyncData('sgov', { baseUrl });
+      const bilBars  = await loadAndSyncData('bil', { baseUrl });
+      const spymBars = await loadAndSyncData('spym', { baseUrl });
 
       // Merge sgov + bil (bil as fallback for older dates)
       const sgovMap = new Map([...bilBars, ...sgovBars].map(b => [b.date, b]));
@@ -60,10 +61,10 @@ export async function POST(req) {
     }
 
     if (strategyType === 'snowball') {
-      const tqqqBars = await loadAndSyncData('tqqq');
-      const qqqBars  = await loadAndSyncData('qqq');
-      const sgovBars = await loadAndSyncData('sgov');
-      const bilBars  = await loadAndSyncData('bil');
+      const tqqqBars = await loadAndSyncData('tqqq', { baseUrl });
+      const qqqBars  = await loadAndSyncData('qqq', { baseUrl });
+      const sgovBars = await loadAndSyncData('sgov', { baseUrl });
+      const bilBars  = await loadAndSyncData('bil', { baseUrl });
 
       const result = runSnowballStrategy({
         tqqqBars,
