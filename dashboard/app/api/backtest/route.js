@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 import { loadAndSyncData } from '@/lib/csvLoader';
 import { runTrendStrategy, runSnowballStrategy } from '@/lib/backtest';
 
+const US_STOCK_FEE_RATE = 0.0025; // 0.25%
+
 export async function POST(req) {
   try {
     const body = await req.json();
@@ -51,7 +53,7 @@ export async function POST(req) {
         startDate: params.startDate || '',
         endDate: params.endDate || '',
         initialCapital: parseFloat(params.initialCapital || 100_000),
-        feeRate: 0.0025,
+        feeRate: US_STOCK_FEE_RATE,
         monthlyDCA: parseFloat(params.monthlyDCA || 0),
         annualContributionLimit: parseFloat(params.annualContributionLimit || 0),
       });
@@ -93,7 +95,7 @@ export async function POST(req) {
           endDate:               params.endDate || '',
         },
         initialCapital: parseFloat(params.initialCapital || 100_000),
-        feeRate: 0.0025,
+        feeRate: US_STOCK_FEE_RATE,
         annualCashYield: 0.035, // fallback 3.5%
         taxEnabled: params.taxEnabled !== false,
       });

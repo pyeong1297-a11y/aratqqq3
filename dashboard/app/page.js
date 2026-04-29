@@ -23,7 +23,7 @@ const PRESETS = {
       confirmDays: 3,
       initialCapital: 100000,
       monthlyDCA: 0,
-      stopLossEnabled: true,
+      stopLossEnabled: false,
       stopLossThreshold: -5,
       profitTakeEnabled: true,
       profitTakeSteps: [
@@ -41,7 +41,7 @@ const PRESETS = {
       confirmDays: 2,
       initialCapital: 100000,
       monthlyDCA: 0,
-      stopLossEnabled: true,
+      stopLossEnabled: false,
       stopLossThreshold: -5,
       profitTakeEnabled: true,
       profitTakeSteps: [
@@ -57,7 +57,7 @@ const PRESETS = {
       confirmDays: 2,
       initialCapital: 100000,
       monthlyDCA: 0,
-      stopLossEnabled: true,
+      stopLossEnabled: false,
       stopLossThreshold: -10,
       profitTakeEnabled: true,
       profitTakeSteps: [

@@ -97,7 +97,7 @@ export const STRATEGIES = {
     },
     slippageScenarios: [
       { id: "optimistic", label: "Optimistic", slippageRate: 0.0 },
-      { id: "base", label: "Base", slippageRate: 0.0005 },
+      { id: "base", label: "Base", slippageRate: 0.0 },
       { id: "conservative", label: "Conservative", slippageRate: 0.001 },
       { id: "stress", label: "Stress", slippageRate: 0.002 }
     ],
@@ -118,7 +118,7 @@ export const STRATEGIES = {
     },
     slippageScenarios: [
       { id: "optimistic", label: "Optimistic", slippageRate: 0.0 },
-      { id: "base", label: "Base", slippageRate: 0.0005 },
+      { id: "base", label: "Base", slippageRate: 0.0 },
       { id: "conservative", label: "Conservative", slippageRate: 0.001 },
       { id: "stress", label: "Stress", slippageRate: 0.002 }
     ],
@@ -139,7 +139,7 @@ export const STRATEGIES = {
     },
     slippageScenarios: [
       { id: "optimistic", label: "Optimistic", slippageRate: 0.0 },
-      { id: "base", label: "Base", slippageRate: 0.0005 },
+      { id: "base", label: "Base", slippageRate: 0.0 },
       { id: "conservative", label: "Conservative", slippageRate: 0.001 },
       { id: "stress", label: "Stress", slippageRate: 0.002 }
     ],
@@ -160,7 +160,7 @@ export const STRATEGIES = {
     },
     slippageScenarios: [
       { id: "optimistic", label: "Optimistic", slippageRate: 0.0 },
-      { id: "base", label: "Base", slippageRate: 0.0005 },
+      { id: "base", label: "Base", slippageRate: 0.0 },
       { id: "conservative", label: "Conservative", slippageRate: 0.001 },
       { id: "stress", label: "Stress", slippageRate: 0.002 }
     ],
@@ -181,7 +181,7 @@ export const STRATEGIES = {
     },
     slippageScenarios: [
       { id: "optimistic", label: "Optimistic", slippageRate: 0.0 },
-      { id: "base", label: "Base", slippageRate: 0.0005 },
+      { id: "base", label: "Base", slippageRate: 0.0 },
       { id: "conservative", label: "Conservative", slippageRate: 0.001 },
       { id: "stress", label: "Stress", slippageRate: 0.002 }
     ],
@@ -202,7 +202,7 @@ export const STRATEGIES = {
       legacyMonthlyContribution: 0
     },
     executionScenarios: [
-      { id: "pdf-base", label: "PDF base", slippagePerShare: 0.02 }
+      { id: "pdf-base", label: "PDF base", slippagePerShare: 0 }
     ],
     settings: US_SNOWBALL_BASIC_SETTINGS
   },
@@ -220,7 +220,7 @@ export const STRATEGIES = {
       legacyMonthlyContribution: 0
     },
     executionScenarios: [
-      { id: "pdf-base", label: "PDF base", slippagePerShare: 0.02 }
+      { id: "pdf-base", label: "PDF base", slippagePerShare: 0 }
     ],
     settings: US_SNOWBALL_OPTIMIZED_SETTINGS
   },
@@ -238,7 +238,7 @@ export const STRATEGIES = {
       legacyMonthlyContribution: 0
     },
     executionScenarios: [
-      { id: "pdf-base", label: "PDF base", slippagePerShare: 0.02 }
+      { id: "pdf-base", label: "PDF base", slippagePerShare: 0 }
     ],
     settings: US_SNOWBALL_OPTIMIZED_SGOV_SETTINGS
   },
@@ -256,7 +256,7 @@ export const STRATEGIES = {
       legacyMonthlyContribution: 0
     },
     executionScenarios: [
-      { id: "pdf-base", label: "PDF base", slippagePerShare: 0.02 }
+      { id: "pdf-base", label: "PDF base", slippagePerShare: 0 }
     ],
     settings: US_SNOWBALL_OPTIMIZED_DEFENSIVE_SETTINGS
   },
@@ -274,7 +274,7 @@ export const STRATEGIES = {
       legacyMonthlyContribution: 0
     },
     executionScenarios: [
-      { id: "pdf-base", label: "PDF base", slippagePerShare: 0.02 }
+      { id: "pdf-base", label: "PDF base", slippagePerShare: 0 }
     ],
     settings: US_SNOWBALL_ROUNDED_SETTINGS
   },

@@ -9,9 +9,16 @@ The runtime now keeps only these strategies or modes:
 - `us-tqqq-balance`
 - `us-tqqq-defense`
 - `us-snowball-basic`
+- `us-snowball-optimized`
 - `us-bulz`
 - `isa-kodex / pure-200-3d`
 - `isa-kodex / dual-strict`
+
+Reference data was refreshed from Yahoo on `2026-04-29`.
+
+- US symbols: through `2026-04-28`
+- KR/FX symbols: through `2026-04-29`
+- Reference execution: no slippage, `0.25%` trading fee
 
 ## Direct US Valuation
 
@@ -31,14 +38,11 @@ Direct US strategies are valued in `USD`.
 - Profit take: none
 - Risk-off parking: `SGOV`, with `BIL` fallback before `SGOV` inception
 
-Current reference result:
+Current reference results:
 
-- period: `2010-02-11 ~ 2026-04-02`
-- base / no tax
-- ending value: `$4,631,933`
-- total return: `4545.83%`
-- CAGR: `26.85%`
-- MDD: `-48.76%`
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$5,296,445`, total return `5209.69%`, CAGR `27.77%`, MDD `-48.65%`
+- base / taxed: ending value `$2,830,615`, total return `2737.69%`, CAGR `22.93%`, MDD `-51.02%`
 
 ## `us-tqqq-growth`
 
@@ -48,14 +52,11 @@ Current reference result:
   - `+100% @ 50%`
   - `+200% @ 100%`
 
-Current reference result:
+Current reference results:
 
-- period: `2010-02-11 ~ 2026-04-02`
-- base / no tax
-- ending value: `$5,825,158`
-- total return: `5742.64%`
-- CAGR: `28.67%`
-- MDD: `-43.47%`
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$6,688,709`, total return `6605.43%`, CAGR `29.62%`, MDD `-43.03%`
+- base / taxed: ending value `$3,438,040`, total return `3346.64%`, CAGR `24.41%`, MDD `-49.04%`
 
 ## `us-tqqq-balance`
 
@@ -66,14 +67,11 @@ Current reference result:
   - `+100% @ 50%`
   - `+200% @ 100%`
 
-Current reference result:
+Current reference results:
 
-- period: `2010-02-11 ~ 2026-04-02`
-- base / no tax
-- ending value: `$5,757,342`
-- total return: `5674.62%`
-- CAGR: `28.58%`
-- MDD: `-40.72%`
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$6,619,522`, total return `6536.07%`, CAGR `29.54%`, MDD `-40.25%`
+- base / taxed: ending value `$3,372,101`, total return `3280.53%`, CAGR `24.26%`, MDD `-46.40%`
 
 ## `us-tqqq-defense`
 
@@ -87,14 +85,11 @@ Current reference result:
   - `+200% @ 50%`
   - `+300% @ 50%`
 
-Current reference result:
+Current reference results:
 
-- period: `2010-02-11 ~ 2026-04-02`
-- base / no tax
-- ending value: `$4,390,682`
-- total return: `4303.86%`
-- CAGR: `26.43%`
-- MDD: `-38.72%`
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$5,062,643`, total return `4975.30%`, CAGR `27.42%`, MDD `-38.10%`
+- base / taxed: ending value `$2,657,980`, total return `2564.62%`, CAGR `22.45%`, MDD `-43.75%`
 
 ## `us-snowball-basic`
 
@@ -115,14 +110,27 @@ Current reference result:
   - cooldown: `5` trading days after dead cross
 - idle cash yield: `4.5%`
 
-Current reference result:
+Current reference results:
 
-- period: `2010-02-11 ~ 2026-04-02`
-- base / no tax
-- ending value: `$55,831,585`
-- total return: `55731.59%`
-- CAGR: `47.99%`
-- MDD: `-53.11%`
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$99,322,564`, total return `99222.56%`, CAGR `53.08%`, MDD `-52.83%`
+- base / taxed: ending value `$45,598,235`, total return `45498.24%`, CAGR `45.90%`, MDD `-52.83%`
+
+## `us-snowball-optimized`
+
+- base rule: same as `us-snowball-basic`
+- optimized parameters:
+  - dip1 drawdown: `-11%`
+  - dip2 drawdown: `-22%`
+  - TP1: `+37%`, sell `53%` of base shares
+  - TP2: `+87%`, sell `47%` of base shares
+  - TP3: `+355%`, full exit
+
+Current reference results:
+
+- period: `2010-02-11 ~ 2026-04-28`
+- base / no tax: ending value `$148,843,792`, total return `148743.79%`, CAGR `56.94%`, MDD `-52.83%`
+- base / taxed: ending value `$66,875,502`, total return `66775.50%`, CAGR `49.39%`, MDD `-52.83%`
 
 ## `us-bulz`
 
@@ -132,14 +140,11 @@ Current reference result:
 - Profit take: `+100%` full exit
 - Profit-take parking: `SGOV`
 
-Current reference result:
+Current reference results:
 
-- period: `2021-08-18 ~ 2026-04-02`
-- base / no tax
-- ending value: `$834,260`
-- total return: `736.76%`
-- CAGR: `58.35%`
-- MDD: `-35.03%`
+- period: `2021-08-18 ~ 2026-04-28`
+- base / no tax: ending value `$1,013,691`, total return `916.23%`, CAGR `63.90%`, MDD `-34.64%`
+- base / taxed: ending value `$755,543`, total return `657.43%`, CAGR `53.95%`, MDD `-39.67%`
 
 ## ISA Wrapper
 
@@ -162,14 +167,11 @@ Shared ISA profit take:
 - enter after `TQQQ close > SMA200` for 3 consecutive US sessions
 - exit on `TQQQ close < SMA200`
 
-Current reference result:
+Current reference results:
 
-- period: `2021-08-18 ~ 2026-04-02`
-- base / no tax
-- ending value: `166,521,703 KRW`
-- total return: `312.45%`
-- CAGR: `35.88%`
-- MDD: `-29.31%`
+- period: `2021-08-18 ~ 2026-04-29`
+- base / no tax: ending value `189,121,228 KRW`, total return `366.26%`, CAGR `38.80%`, MDD `-28.33%`
+- base / taxed: ending value `168,337,515 KRW`, total return `308.76%`, CAGR `34.97%`, MDD `-28.09%`
 
 ### `dual-strict`
 
@@ -178,11 +180,8 @@ Current reference result:
 - default exit on `TQQQ close < SMA200`
 - for the first 10 sessions after entry, only an `SMA220` break can force exit
 
-Current reference result:
+Current reference results:
 
-- period: `2021-08-18 ~ 2026-04-02`
-- base / no tax
-- ending value: `186,039,407 KRW`
-- total return: `390.58%`
-- CAGR: `41.08%`
-- MDD: `-28.63%`
+- period: `2021-08-18 ~ 2026-04-29`
+- base / no tax: ending value `206,945,845 KRW`, total return `427.44%`, CAGR `42.50%`, MDD `-27.09%`
+- base / taxed: ending value `183,607,020 KRW`, total return `360.45%`, CAGR `38.43%`, MDD `-26.79%`
