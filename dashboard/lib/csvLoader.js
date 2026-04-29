@@ -7,10 +7,26 @@ function parseCsvRows(raw) {
   const parsed = Papa.parse(raw, { header: true, skipEmptyLines: true });
 
   return parsed.data
-    .map((row) => ({
-      date: row.Date || row.date,
-      adjClose: parseFloat(row['Adj Close'] || row.adjClose || row.Close || row.close || 0),
-    }))
+    .map((row) => {
+      const close = parseFloat(row.Close || row.close || 0);
+      const adjClose = parseFloat(row['Adj Close'] || row.adjClose || row.Close || row.close || 0);
+      const open = parseFloat(row.Open || row.open || close);
+      const high = parseFloat(row.High || row.high || Math.max(open, close));
+      const low = parseFloat(row.Low || row.low || Math.min(open, close));
+      const factor = close === 0 ? 1 : adjClose / close;
+
+      return {
+        date: row.Date || row.date,
+        open,
+        high,
+        low,
+        close,
+        adjClose,
+        adjOpen: open * factor,
+        adjHigh: high * factor,
+        adjLow: low * factor,
+      };
+    })
     .filter((row) => !isNaN(row.adjClose) && row.adjClose > 0);
 }
 
@@ -69,9 +85,21 @@ export async function loadAndSyncData(symbol, options = {}) {
 
       for (const row of historical) {
         const date = row.date.toISOString().split('T')[0];
+        const close = row.close;
         const adjClose = row.adjClose || row.close;
+        const open = row.open || close;
+        const high = row.high || Math.max(open, close);
+        const low = row.low || Math.min(open, close);
+        const factor = close === 0 ? 1 : adjClose / close;
+
         if (adjClose > 0) {
-          dataMap.set(date, { date, adjClose });
+          dataMap.set(date, { 
+            date, 
+            open, high, low, close, adjClose,
+            adjOpen: open * factor,
+            adjHigh: high * factor,
+            adjLow: low * factor
+          });
         }
       }
 

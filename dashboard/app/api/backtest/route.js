@@ -94,7 +94,8 @@ export async function POST(req) {
         },
         initialCapital: parseFloat(params.initialCapital || 100_000),
         feeRate: 0.0025,
-        annualCashYield: 0.045, // kept as fallback; engine uses SGOV map first
+        annualCashYield: 0.035, // fallback 3.5%
+        taxEnabled: params.taxEnabled !== false,
       });
 
       const curve = downsample(result.equityCurve, 800);

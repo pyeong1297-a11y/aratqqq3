@@ -324,7 +324,10 @@ export default function Dashboard() {
               {/* Snowball DIP Settings */}
               <div className={styles.accordion}>
                 <button className={styles.accordionHeader} onClick={() => toggleSection('snowballDip')}>
-                  <div className={styles.accordionTitle}><Target size={14}/> 하락장 매수 (DIP)</div>
+                  <div className={styles.accordionTitle}>
+                    <Target size={14}/> 하락장 매수 (DIP)
+                    <span className={styles.badgeSmall} style={{ marginLeft: '8px', fontSize: '10px', background: '#eff6ff', color: '#3b82f6' }}>장중 시장가 주문</span>
+                  </div>
                   {openSections.snowballDip ? <ChevronDown size={16}/> : <ChevronRight size={16}/>}
                 </button>
                 {openSections.snowballDip && (

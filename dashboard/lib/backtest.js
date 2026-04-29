@@ -440,7 +440,7 @@ export function runTrendStrategy({
   };
 }
 
-// ─── Snowball Strategy ────────────────────────────────────
+// ─── Snowball Strategy (High Fidelity Version) ─────────────
 export function runSnowballStrategy({
   tqqqBars,
   qqqBars,
@@ -449,7 +449,8 @@ export function runSnowballStrategy({
   settings,
   initialCapital = 100_000,
   feeRate = 0.0025,
-  annualCashYield = 0.045,
+  annualCashYield = 0.035, // Updated fallback to 3.5%
+  taxEnabled = true,
 }) {
   const {
     dip1Drawdown = -0.11,
@@ -475,20 +476,29 @@ export function runSnowballStrategy({
   const buyP  = p => p * (1 + feeRate);
   const sellP = p => p * (1 - feeRate);
 
-  // 1. Build indicator maps from FULL QQQ history (for proper warmup)
+  // 1. Build indicator maps and parking data
   const tqqqMap = new Map(tqqqBars.map(b => [b.date, b]));
   const qqqMap  = new Map(qqqBars.map(b => [b.date, b]));
-  const sgovMap = new Map([...bilBars, ...sgovBars].map(b => [b.date, b]));
+  
+  // Combine SGOV and BIL for parking
+  const parkingMap = new Map();
+  [...bilBars, ...sgovBars].forEach(b => {
+    parkingMap.set(b.date, b.adjClose);
+  });
 
-  // Indicators on full QQQ history (1999~)
+  // Indicators on full QQQ history
   const qqqAllDates = qqqBars.map(b => b.date).sort();
-  const qqqAllCloses = qqqAllDates.map(d => qqqMap.get(d)?.adjClose || null);
+  // Ensure we use adjHigh if available for rolling high
+  const qqqAllHighs = qqqAllDates.map(d => {
+    const bar = qqqMap.get(d);
+    return bar?.adjHigh || bar?.adjClose || null;
+  });
 
   const qqqRollingHighs = new Array(qqqAllDates.length).fill(null);
   for (let i = 0; i < qqqAllDates.length; i++) {
     const start = Math.max(0, i - qqqLookbackDays + 1);
     let max = -Infinity;
-    for (let j = start; j <= i; j++) if (qqqAllCloses[j]) max = Math.max(max, qqqAllCloses[j]);
+    for (let j = start; j <= i; j++) if (qqqAllHighs[j]) max = Math.max(max, qqqAllHighs[j]);
     qqqRollingHighs[i] = max > 0 ? max : null;
   }
 
@@ -515,14 +525,17 @@ export function runSnowballStrategy({
   let tqqqShares = 0;
   let tqqqCost = 0;
   let tpBaseShares = 0;
-  let inTrend = false;
   let hasGoldCrossSinceDeadCross = false;
   let tp3LockActive = false;
   let tp1Done = false, tp2Done = false;
   let dip1Consumed = false, dip2Consumed = false, bonusConsumed = false;
   let cooldownUntilIndex = -1;
 
-  const dailyYield = Math.pow(1 + annualCashYield, 1/252) - 1;
+  // Taxation state
+  const realizedGainsByYear = new Map(); // Year -> Net Profit
+  const taxPaidByYear = new Map(); // Year -> Tax Amount
+
+  const dailyYieldFallback = Math.pow(1 + annualCashYield, 1/252) - 1;
   const tqqqDateSet = new Set(tqqqBars.map(b => b.date));
   const allDates = qqqAllDates.filter(d => tqqqDateSet.has(d));
   
@@ -540,12 +553,15 @@ export function runSnowballStrategy({
   for (let i = 0; i < allDates.length; i++) {
     const date = allDates[i];
     const tPrice = allTqqqCloses[i];
-    const qPrice = qqqMap.get(date)?.adjClose || 0;
+    const qBar = qqqMap.get(date);
+    const qHigh = qBar?.adjHigh || qBar?.adjClose || 0;
     const rHigh = rollingHighMap.get(date) || 0;
     const rsiVal = rsiArr[i];
 
     if (startDate && date < startDate) continue;
     if (endDate && date > endDate) break;
+
+    const currentYear = new Date(date).getFullYear();
 
     if (!hasInitialized && tPrice > 0) {
       bnhShares = initialCapital / buyP(tPrice);
@@ -554,16 +570,47 @@ export function runSnowballStrategy({
     }
     if (!hasInitialized) continue;
 
-    // Daily yield
-    if (i > 0) cash *= (1 + dailyYield);
+    // ── Cash Interest Logic (Actual SGOV/BIL or Fallback)
+    if (i > 0) {
+      const prevDate = allDates[i - 1];
+      const prevParking = parkingMap.get(prevDate);
+      const currParking = parkingMap.get(date);
+      
+      if (prevParking && currParking) {
+        cash *= (currParking / prevParking);
+      } else {
+        cash *= (1 + dailyYieldFallback);
+      }
+    }
 
-    const drawdown = rHigh > 0 ? qPrice / rHigh - 1 : 0;
+    // ── Taxation: Pay last year's tax in May (once per year)
+    const dateObj = new Date(date);
+    if (taxEnabled && dateObj.getMonth() === 4) { // May
+      const lastYear = currentYear - 1;
+      if (realizedGainsByYear.has(lastYear) && !taxPaidByYear.has(lastYear)) {
+        // Find if this is the first day of May in our dates
+        const isFirstTradingDayOfMay = i === 0 || new Date(allDates[i-1]).getMonth() !== 4;
+        
+        if (isFirstTradingDayOfMay) {
+          const gains = realizedGainsByYear.get(lastYear);
+          const taxable = Math.max(0, gains - 2500); // 2500 USD deduction
+          const tax = taxable * 0.22;
+          if (tax > 0) {
+            cash -= tax;
+            events.push({ date, type: 'tax-payment', amount: tax, year: lastYear });
+          }
+          taxPaidByYear.set(lastYear, tax);
+        }
+      }
+    }
+
+    const drawdown = rHigh > 0 ? qHigh / rHigh - 1 : 0; // Use adjHigh for drawdown!
     const inCooldown = i <= cooldownUntilIndex;
     const goldCross = i > 0 && smaShort[i-1] <= smaLong[i-1] && smaShort[i] > smaLong[i];
     const deadCross = i > 0 && smaShort[i-1] >= smaLong[i-1] && smaShort[i] < smaLong[i];
     const currentEquity = cash + tqqqShares * tPrice;
 
-    if (qPrice >= rHigh * (1 - 1e-9)) {
+    if (qHigh >= rHigh * (1 - 1e-9)) {
       dip1Consumed = false; dip2Consumed = false; bonusConsumed = false;
     }
 
@@ -575,7 +622,6 @@ export function runSnowballStrategy({
       tqqqShares += fillShares;
       tqqqCost += actualBuy;
       cash -= actualBuy;
-      // ONLY set tpBaseShares if it was 0 (start of accumulation or trend)
       if (tpBaseShares === 0) tpBaseShares = tqqqShares;
       events.push({ date, type: reason, price: tPrice, amount: actualBuy });
     };
@@ -586,6 +632,9 @@ export function runSnowballStrategy({
       const avgCost = tqqqCost / tqqqShares;
       const amt = actualSell * sellP(tPrice);
       const profit = actualSell * (sellP(tPrice) - avgCost);
+      
+      realizedGainsByYear.set(currentYear, (realizedGainsByYear.get(currentYear) || 0) + profit);
+      
       tqqqShares -= actualSell;
       tqqqCost = Math.max(0, tqqqCost * (tqqqShares / (tqqqShares + actualSell)));
       cash += amt;
@@ -594,11 +643,7 @@ export function runSnowballStrategy({
 
     // 1. Dead Cross / TP3 checks.
     if (tqqqShares > 0 && deadCross) {
-      const amt = tqqqShares * sellP(tPrice);
-      const profit = amt - tqqqCost;
-      cash += amt;
-      events.push({ date, type: 'dc-exit', price: tPrice, amount: amt, profit });
-      tqqqShares = 0; tqqqCost = 0;
+      executeSell(tqqqShares, 'dc-exit');
       tpBaseShares = 0;
       tp1Done = false;
       tp2Done = false;
@@ -610,11 +655,7 @@ export function runSnowballStrategy({
     if (tqqqShares > 0 && !tp3LockActive) {
       const avgCost = tqqqCost / tqqqShares;
       if (tPrice >= avgCost * (1 + tp3Threshold)) {
-        const amt = tqqqShares * sellP(tPrice);
-        const profit = amt - tqqqCost;
-        cash += amt;
-        events.push({ date, type: 'tp3', price: tPrice, amount: amt, profit });
-        tqqqShares = 0; tqqqCost = 0;
+        executeSell(tqqqShares, 'tp3');
         tpBaseShares = 0;
         tp1Done = false;
         tp2Done = false;
