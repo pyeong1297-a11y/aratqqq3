@@ -411,7 +411,8 @@
 
 .infoHeader,
 .positionHeader,
-.levelHeader {
+.levelHeader,
+.tradeHeader {
   gap: 7px;
   color: #334155;
   font-size: 13px;
@@ -509,6 +510,24 @@
 .tpRow strong {
   flex: 1 1 126px;
   min-width: 112px;
+}
+
+.recordPresetButton {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 8px;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.recordPresetButton:disabled {
+  opacity: 0.42;
+  cursor: default;
 }
 
 .statusDetail {
@@ -638,6 +657,111 @@
   font-weight: 800;
 }
 
+.tradeBox {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.tradeHeader {
+  display: flex;
+  align-items: center;
+}
+
+.tradeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.tradeGrid label {
+  min-width: 0;
+}
+
+.tradeGrid label span {
+  display: block;
+  margin-bottom: 5px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.tradeGrid input,
+.tradeGrid select {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.tradeGrid button {
+  align-self: end;
+  height: 34px;
+  color: #ffffff;
+  background: #0f766e;
+  border: 0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.tradeGrid button:disabled {
+  opacity: 0.52;
+  cursor: default;
+}
+
+.tradeError {
+  margin-top: 8px;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.tradeRecords {
+  margin-top: 10px;
+}
+
+.tradeRecord {
+  padding: 9px 0;
+  border-top: 1px solid #e2e8f0;
+}
+
+.tradeRecord span,
+.tradeRecord strong,
+.tradeRecord em {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.tradeRecord span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tradeRecord strong {
+  margin-top: 3px;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.tradeRecord em {
+  margin-top: 3px;
+  color: #047857;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+}
+
 @media (max-width: 1180px) {
   .strategyGrid {
     grid-template-columns: 1fr;
@@ -700,7 +824,8 @@
   }
 
   .inputGrid,
-  .positionStats {
+  .positionStats,
+  .tradeGrid {
     grid-template-columns: 1fr;
   }
 }

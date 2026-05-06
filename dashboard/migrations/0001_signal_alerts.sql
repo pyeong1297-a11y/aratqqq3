@@ -66,3 +66,29 @@ CREATE TABLE IF NOT EXISTS alert_logs (
   message TEXT NOT NULL,
   sent_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS trade_records (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cycle_id INTEGER,
+  strategy_key TEXT NOT NULL,
+  source_symbol TEXT NOT NULL,
+  action_type TEXT NOT NULL,
+  tp_label TEXT,
+  trade_date TEXT NOT NULL,
+  sell_shares REAL NOT NULL,
+  sell_price REAL NOT NULL,
+  sell_amount REAL NOT NULL,
+  entry_price REAL,
+  realized_profit REAL,
+  realized_return REAL,
+  replacement_symbol TEXT,
+  replacement_shares REAL,
+  replacement_price REAL,
+  replacement_amount REAL,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  FOREIGN KEY (cycle_id) REFERENCES cycles(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_trade_records_strategy_date
+  ON trade_records(strategy_key, trade_date DESC, id DESC);

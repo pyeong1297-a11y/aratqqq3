@@ -57,9 +57,33 @@ const SCHEMA = [
     cycle_id INTEGER,
     event_type TEXT NOT NULL,
     event_date TEXT NOT NULL,
-    message TEXT NOT NULL,
-    sent_at TEXT NOT NULL
+     message TEXT NOT NULL,
+     sent_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS trade_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cycle_id INTEGER,
+    strategy_key TEXT NOT NULL,
+    source_symbol TEXT NOT NULL,
+    action_type TEXT NOT NULL,
+    tp_label TEXT,
+    trade_date TEXT NOT NULL,
+    sell_shares REAL NOT NULL,
+    sell_price REAL NOT NULL,
+    sell_amount REAL NOT NULL,
+    entry_price REAL,
+    realized_profit REAL,
+    realized_return REAL,
+    replacement_symbol TEXT,
+    replacement_shares REAL,
+    replacement_price REAL,
+    replacement_amount REAL,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (cycle_id) REFERENCES cycles(id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_trade_records_strategy_date
+    ON trade_records(strategy_key, trade_date DESC, id DESC)`,
 ];
 
 const STRATEGY_SYMBOLS = {
@@ -279,4 +303,151 @@ export async function insertAlertLog(db, alert) {
     alert.message,
     now
   ).run();
+}
+
+function positiveOrNull(value) {
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizeTradeRow(row) {
+  return {
+    id: row.id,
+    cycleId: row.cycle_id,
+    strategyKey: row.strategy_key,
+    sourceSymbol: row.source_symbol,
+    actionType: row.action_type,
+    tpLabel: row.tp_label,
+    tradeDate: row.trade_date,
+    sellShares: row.sell_shares,
+    sellPrice: row.sell_price,
+    sellAmount: row.sell_amount,
+    entryPrice: row.entry_price,
+    realizedProfit: row.realized_profit,
+    realizedReturn: row.realized_return,
+    replacementSymbol: row.replacement_symbol,
+    replacementShares: row.replacement_shares,
+    replacementPrice: row.replacement_price,
+    replacementAmount: row.replacement_amount,
+    notes: row.notes,
+    createdAt: row.created_at,
+  };
+}
+
+export async function listTradeRecords(db, strategyKey = null) {
+  await ensureSchema(db);
+
+  const key = strategyKey ? normalizeStrategyKey(strategyKey) : null;
+  const statement = key
+    ? db.prepare(
+        `SELECT *
+         FROM trade_records
+         WHERE strategy_key = ?
+         ORDER BY trade_date DESC, id DESC
+         LIMIT 50`
+      ).bind(key)
+    : db.prepare(
+        `SELECT *
+         FROM trade_records
+         ORDER BY trade_date DESC, id DESC
+         LIMIT 100`
+      );
+
+  const { results = [] } = await statement.all();
+  return results.map(normalizeTradeRow);
+}
+
+export async function recordTakeProfitTrade(db, input) {
+  await ensureSchema(db);
+
+  const key = normalizeStrategyKey(input.strategyKey);
+  const symbol = STRATEGY_SYMBOLS[key];
+  const sellShares = positiveOrNull(input.sellShares);
+  const sellPrice = positiveOrNull(input.sellPrice);
+
+  if (!sellShares) throw new Error('Sell shares must be greater than 0.');
+  if (!sellPrice) throw new Error('Sell price must be greater than 0.');
+
+  const position = await db.prepare(
+    `SELECT strategy_key, symbol, entry_price, shares, active
+     FROM positions
+     WHERE strategy_key = ?`
+  ).bind(key).first();
+
+  const currentShares = positiveOrNull(position?.shares) || 0;
+  if (sellShares > currentShares) {
+    throw new Error('Sell shares exceed current position shares.');
+  }
+
+  const entryPrice = positiveOrNull(input.entryPrice) || positiveOrNull(position?.entry_price);
+  const sellAmount = sellShares * sellPrice;
+  const realizedProfit = entryPrice ? (sellPrice - entryPrice) * sellShares : null;
+  const realizedReturn = entryPrice ? sellPrice / entryPrice - 1 : null;
+  const replacementSymbol = `${input.replacementSymbol || 'SPYM'}`.trim().toUpperCase() || 'SPYM';
+  const replacementShares = positiveOrNull(input.replacementShares);
+  const replacementPrice = positiveOrNull(input.replacementPrice);
+  const replacementAmount = replacementShares && replacementPrice
+    ? replacementShares * replacementPrice
+    : sellAmount;
+  const tradeDate = input.tradeDate || new Date().toISOString().slice(0, 10);
+  const now = new Date().toISOString();
+  const cycle = await getOpenCycle(db, key);
+
+  await db.prepare(
+    `INSERT INTO trade_records (
+       cycle_id, strategy_key, source_symbol, action_type, tp_label, trade_date,
+       sell_shares, sell_price, sell_amount, entry_price, realized_profit, realized_return,
+       replacement_symbol, replacement_shares, replacement_price, replacement_amount,
+       notes, created_at
+     ) VALUES (?, ?, ?, 'take_profit_rebuy', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    cycle?.id ?? null,
+    key,
+    symbol,
+    input.tpLabel || null,
+    tradeDate,
+    sellShares,
+    sellPrice,
+    sellAmount,
+    entryPrice ?? null,
+    realizedProfit,
+    realizedReturn,
+    replacementSymbol,
+    replacementShares,
+    replacementPrice,
+    replacementAmount,
+    input.notes || null,
+    now
+  ).run();
+
+  const nextShares = Math.max(0, currentShares - sellShares);
+  const active = nextShares > 0 ? 1 : 0;
+
+  await db.prepare(
+    `UPDATE positions
+     SET shares = ?,
+         active = ?,
+         closed_at = CASE WHEN ? = 0 THEN ? ELSE NULL END,
+         updated_at = ?
+     WHERE strategy_key = ?`
+  ).bind(nextShares, active, active, now, now, key).run();
+
+  const saved = await db.prepare(
+    `SELECT *
+     FROM trade_records
+     WHERE strategy_key = ?
+     ORDER BY id DESC
+     LIMIT 1`
+  ).bind(key).first();
+
+  return {
+    record: normalizeTradeRow(saved),
+    position: {
+      strategyKey: key,
+      symbol,
+      entryPrice: entryPrice ?? null,
+      shares: nextShares,
+      active: active === 1,
+      updatedAt: now,
+    },
+  };
 }

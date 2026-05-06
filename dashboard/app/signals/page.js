@@ -16,6 +16,7 @@ import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
+  CheckCircle2,
   Clock3,
   RefreshCw,
   Target,
@@ -32,6 +33,7 @@ const EMPTY_POSITIONS = {
 
 const STORAGE_KEY = 'ara_signal_positions_v1';
 const POSITIONS_API = '/api/positions';
+const TRADES_API = '/api/trades';
 
 function normalizePositions(value) {
   return {
@@ -64,6 +66,17 @@ async function clearPositionOnServer(strategyKey) {
   await fetch(`${POSITIONS_API}?strategy=${encodeURIComponent(strategyKey)}`, {
     method: 'DELETE',
   });
+}
+
+async function recordTradeToServer(payload) {
+  const response = await fetch(TRADES_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || '익절 기록 저장에 실패했습니다.');
+  return data;
 }
 
 function formatCurrency(value, decimals = 2) {
@@ -108,6 +121,11 @@ function formatQuoteTime(value) {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+function formatDate(value) {
+  if (!value) return '-';
+  return `${value}`.slice(0, 10);
 }
 
 function formatMetric(metric) {
@@ -283,10 +301,29 @@ function DipRows({ strategy }) {
   );
 }
 
-function PositionPanel({ strategy, position, onPositionChange, onPositionClear }) {
+function PositionPanel({
+  strategy,
+  position,
+  tradeRecords,
+  onPositionChange,
+  onPositionClear,
+  onTradeRecord,
+}) {
   const entry = parseInput(position.entry);
   const shares = parseInput(position.shares);
   const markPrice = getMarkPrice(strategy);
+  const today = new Date().toISOString().slice(0, 10);
+  const [tradeForm, setTradeForm] = useState({
+    tpLabel: 'TP1',
+    tradeDate: today,
+    sellShares: '',
+    sellPrice: '',
+    replacementSymbol: 'SPYM',
+    replacementShares: '',
+    replacementPrice: '',
+  });
+  const [tradeSaving, setTradeSaving] = useState(false);
+  const [tradeError, setTradeError] = useState('');
   const hasEntry = entry > 0 && Number.isFinite(markPrice);
   const hasShares = hasEntry && shares > 0;
   const gainPct = hasEntry ? markPrice / entry - 1 : null;
@@ -307,6 +344,51 @@ function PositionPanel({ strategy, position, onPositionChange, onPositionClear }
         };
       })
     : [];
+  const visibleRecords = tradeRecords.slice(0, 4);
+
+  const updateTradeForm = (field, value) => {
+    setTradeForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const fillTpDefaults = (row) => {
+    const rule = normalizeTpRules(strategy).find((item) => item.label === row.label);
+    const sellShares = Number.isFinite(rule?.sellFraction) && shares > 0
+      ? shares * Math.min(rule.sellFraction, 1)
+      : '';
+
+    setTradeForm((current) => ({
+      ...current,
+      tpLabel: row.label,
+      sellShares: sellShares ? String(Number(sellShares.toFixed(4))) : current.sellShares,
+      sellPrice: Number.isFinite(markPrice) ? String(Number(markPrice.toFixed(4))) : current.sellPrice,
+    }));
+  };
+
+  const submitTradeRecord = async () => {
+    setTradeSaving(true);
+    setTradeError('');
+
+    try {
+      await onTradeRecord(strategy.key, {
+        ...tradeForm,
+        entryPrice: position.entry,
+      });
+      setTradeForm((current) => ({
+        ...current,
+        sellShares: '',
+        sellPrice: '',
+        replacementShares: '',
+        replacementPrice: '',
+      }));
+    } catch (err) {
+      setTradeError(err.message);
+    } finally {
+      setTradeSaving(false);
+    }
+  };
 
   return (
     <div className={styles.positionBox}>
@@ -382,17 +464,112 @@ function PositionPanel({ strategy, position, onPositionChange, onPositionClear }
               </span>
               <strong>{row.priceText}</strong>
               <em>{row.percentText}</em>
+              <button
+                type="button"
+                className={styles.recordPresetButton}
+                onClick={() => fillTpDefaults(row)}
+                disabled={!hasShares}
+              >
+                기록
+              </button>
             </div>
           ))
         ) : (
           <div className={styles.tpEmpty}>매수가 입력 대기</div>
         )}
       </div>
+
+      <div className={styles.tradeBox}>
+        <div className={styles.tradeHeader}>
+          <CheckCircle2 size={15} />
+          <span>익절 · SPYM 기록</span>
+        </div>
+        <div className={styles.tradeGrid}>
+          <label>
+            <span>TP</span>
+            <select value={tradeForm.tpLabel} onChange={(event) => updateTradeForm('tpLabel', event.target.value)}>
+              {normalizeTpRules(strategy).map((rule) => (
+                <option key={rule.label} value={rule.label}>{rule.label}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>날짜</span>
+            <input
+              type="date"
+              value={tradeForm.tradeDate}
+              onChange={(event) => updateTradeForm('tradeDate', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>매도 수량</span>
+            <input
+              inputMode="decimal"
+              value={tradeForm.sellShares}
+              placeholder="0"
+              onChange={(event) => updateTradeForm('sellShares', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>매도 가격</span>
+            <input
+              inputMode="decimal"
+              value={tradeForm.sellPrice}
+              placeholder="0.00"
+              onChange={(event) => updateTradeForm('sellPrice', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>매수 종목</span>
+            <input
+              value={tradeForm.replacementSymbol}
+              onChange={(event) => updateTradeForm('replacementSymbol', event.target.value.toUpperCase())}
+            />
+          </label>
+          <label>
+            <span>매수 수량</span>
+            <input
+              inputMode="decimal"
+              value={tradeForm.replacementShares}
+              placeholder="선택"
+              onChange={(event) => updateTradeForm('replacementShares', event.target.value)}
+            />
+          </label>
+          <label>
+            <span>매수 가격</span>
+            <input
+              inputMode="decimal"
+              value={tradeForm.replacementPrice}
+              placeholder="선택"
+              onChange={(event) => updateTradeForm('replacementPrice', event.target.value)}
+            />
+          </label>
+          <button type="button" onClick={submitTradeRecord} disabled={!hasShares || tradeSaving}>
+            저장
+          </button>
+        </div>
+        {tradeError ? <div className={styles.tradeError}>{tradeError}</div> : null}
+        {visibleRecords.length ? (
+          <div className={styles.tradeRecords}>
+            {visibleRecords.map((record) => (
+              <div key={record.id} className={styles.tradeRecord}>
+                <span>{formatDate(record.tradeDate)} · {record.tpLabel || 'TP'}</span>
+                <strong>
+                  {formatNumber(record.sellShares, 2)}주 @ {formatCurrency(record.sellPrice)}
+                </strong>
+                <em>
+                  실현 {formatCurrency(record.realizedProfit)} · {record.replacementSymbol} {formatCurrency(record.replacementAmount)}
+                </em>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
 
-function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }) {
+function StrategyPanel({ strategy, position, tradeRecords, onPositionChange, onPositionClear, onTradeRecord }) {
   const markPrice = getMarkPrice(strategy);
   const markChange = getMarkChange(strategy);
   const quoteTime = formatQuoteTime(strategy.liveQuote?.time);
@@ -439,8 +616,10 @@ function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }
         <PositionPanel
           strategy={strategy}
           position={position}
+          tradeRecords={tradeRecords}
           onPositionChange={onPositionChange}
           onPositionClear={onPositionClear}
+          onTradeRecord={onTradeRecord}
         />
       </div>
     </section>
@@ -470,6 +649,7 @@ export default function SignalsPage() {
   const [error, setError] = useState('');
   const [positions, setPositions] = useState(EMPTY_POSITIONS);
   const [positionsReady, setPositionsReady] = useState(false);
+  const [tradeRecords, setTradeRecords] = useState([]);
 
   const loadSignals = useCallback(async () => {
     setLoading(true);
@@ -494,6 +674,21 @@ export default function SignalsPage() {
 
     return () => window.clearTimeout(timer);
   }, [loadSignals]);
+
+  useEffect(() => {
+    async function loadTradeRecords() {
+      try {
+        const response = await fetch(TRADES_API, { cache: 'no-store' });
+        if (!response.ok) return;
+        const payload = await response.json();
+        setTradeRecords(Array.isArray(payload.records) ? payload.records : []);
+      } catch {
+        setTradeRecords([]);
+      }
+    }
+
+    loadTradeRecords();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -574,6 +769,19 @@ export default function SignalsPage() {
     clearPositionOnServer(key).catch(() => {});
   };
 
+  const recordTakeProfit = async (key, payload) => {
+    const result = await recordTradeToServer({
+      strategyKey: key,
+      ...payload,
+    });
+
+    setPositions((current) => ({
+      ...current,
+      [key]: result.clientPosition || current[key],
+    }));
+    setTradeRecords((current) => [result.record, ...current.filter((record) => record.id !== result.record.id)]);
+  };
+
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -629,8 +837,10 @@ export default function SignalsPage() {
                   key={strategy.key}
                   strategy={strategy}
                   position={positions[strategy.key] || EMPTY_POSITIONS[strategy.key]}
+                  tradeRecords={tradeRecords.filter((record) => record.strategyKey === strategy.key)}
                   onPositionChange={updatePosition}
                   onPositionClear={clearPosition}
+                  onTradeRecord={recordTakeProfit}
                 />
               ))}
             </div>
