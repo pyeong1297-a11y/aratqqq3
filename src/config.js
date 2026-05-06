@@ -74,7 +74,10 @@ const US_SNOWBALL_OPTIMIZED_SGOV_SETTINGS = {
   useSgovParking: true
 };
 const US_TQQQ_PROFIT_TAKE_PARKING = { spym: 1 };
-const US_BULZ_PROFIT_TAKE_STEPS = [{ threshold: 1.0, sellFraction: 1.0 }];
+const US_BULZ_PROFIT_TAKE_STEPS = [
+  { threshold: 0.5, sellFraction: 0.1 },
+  { threshold: 1.0, sellFraction: 1.0 }
+];
 const US_BULZ_PROFIT_TAKE_PARKING = { sgov: 1 };
 const ISA_OPTIMIZED_PROFIT_TAKE_STEPS = [
   { threshold: 0.5, sellFraction: 0.33, destination: "sp500" },

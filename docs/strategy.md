@@ -137,7 +137,9 @@ Current reference results:
 - Asset: `BULZ`
 - Entry: `close > SMA200` for 2 consecutive US sessions
 - Exit: `close < SMA200`
-- Profit take: `+100%` full exit
+- Profit takes:
+  - `+50%`: sell `10%` of current shares
+  - `+100%`: full exit
 - Profit-take parking: `SGOV`
 
 Current reference results:

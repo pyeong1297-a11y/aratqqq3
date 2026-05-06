@@ -45,6 +45,7 @@ const PRESETS = {
       stopLossThreshold: -5,
       profitTakeEnabled: true,
       profitTakeSteps: [
+        { threshold: 0.5, sellFraction: 0.1, spymRatio: 0 },
         { threshold: 1.0, sellFraction: 1.0, spymRatio: 0 },
       ],
     },

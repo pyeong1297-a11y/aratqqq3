@@ -1,0 +1,666 @@
+.root {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.12), transparent 32rem),
+    linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+  color: #0f172a;
+}
+
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 14px clamp(18px, 4vw, 44px);
+  background: rgba(248, 250, 252, 0.92);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.28);
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.brandIcon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: #047857;
+  background: #d1fae5;
+  border: 1px solid rgba(4, 120, 87, 0.16);
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.brand span,
+.kicker,
+.summaryTile span,
+.updatedBox span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.brand strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 18px;
+  line-height: 1.1;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav a,
+.nav button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  min-width: 40px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.nav a {
+  padding: 0 14px;
+}
+
+.nav button:hover,
+.nav a:hover {
+  color: #047857;
+  border-color: #10b981;
+  transform: translateY(-1px);
+}
+
+.nav button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.spinIcon {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.main {
+  width: min(1440px, 100%);
+  margin: 0 auto;
+  padding: 28px clamp(16px, 3.5vw, 40px) 56px;
+}
+
+.titleRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.titleRow h1 {
+  margin: 0;
+  font-size: clamp(28px, 4vw, 46px);
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+.titleRow p {
+  margin: 8px 0 0;
+  color: #475569;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.updatedBox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 12px;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.updatedBox span {
+  color: #475569;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.errorBox,
+.loadingBox {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.errorBox {
+  color: #b91c1c;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.loadingBox {
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.summaryTile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.04);
+}
+
+.summaryIcon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: #0369a1;
+  background: #e0f2fe;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.summaryTile div:last-child {
+  min-width: 0;
+}
+
+.summaryTile strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+  line-height: 1.15;
+}
+
+.summaryTile em {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.strategyGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.strategyPanel {
+  min-width: 0;
+  padding: 20px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.06);
+}
+
+.panelTop,
+.priceLine,
+.infoHeader,
+.positionHeader,
+.levelHeader {
+  display: flex;
+  align-items: center;
+}
+
+.panelTop {
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.panelTop h2 {
+  margin: 4px 0 0;
+  font-size: 24px;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.signalBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.tone_positive {
+  color: #047857;
+  background: #d1fae5;
+}
+
+.tone_action {
+  color: #0f766e;
+  background: #ccfbf1;
+}
+
+.tone_watch {
+  color: #a16207;
+  background: #fef3c7;
+}
+
+.tone_danger {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.tone_neutral {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.priceLine {
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.priceLine strong {
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.priceLine span {
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.priceLine em {
+  color: #64748b;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.positiveText {
+  color: #059669;
+}
+
+.negativeText {
+  color: #dc2626;
+}
+
+.chartWrap {
+  height: 282px;
+  margin: 0 -6px 10px -12px;
+}
+
+.tooltip {
+  min-width: 150px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.2);
+}
+
+.tooltipDate {
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tooltipRow {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.tooltipRow + .tooltipRow {
+  margin-top: 6px;
+}
+
+.tooltipRow span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.tooltipRow strong {
+  font-weight: 800;
+}
+
+.tooltipRow em {
+  font-style: normal;
+  font-weight: 900;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  gap: 14px;
+}
+
+.infoBox,
+.positionBox {
+  min-width: 0;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.infoHeader,
+.positionHeader,
+.levelHeader {
+  gap: 7px;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.metricRows {
+  margin-top: 12px;
+}
+
+.metricRow,
+.levelRow,
+.tpRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 13px;
+}
+
+.tpRow {
+  align-items: flex-start;
+  min-height: 48px;
+  padding: 7px 0;
+}
+
+.metricRow span,
+.levelRow span,
+.tpRow span,
+.positionStats span {
+  color: #64748b;
+  font-weight: 700;
+}
+
+.metricRow strong,
+.levelRow strong,
+.tpRow strong,
+.positionStats strong {
+  color: #0f172a;
+  font-weight: 900;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.tpLabel {
+  display: flex;
+  flex: 1 1 110px;
+  min-width: 90px;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tpLabel b {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.tpLabel small {
+  color: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.tpRow strong {
+  flex: 1 1 126px;
+  min-width: 112px;
+}
+
+.statusDetail {
+  margin-top: 12px;
+  padding: 10px 12px;
+  color: #334155;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.levelRows {
+  margin-top: 14px;
+}
+
+.levelHeader {
+  margin-bottom: 6px;
+}
+
+.levelRow em,
+.tpRow em {
+  min-width: 74px;
+  color: #64748b;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+}
+
+.levelActive {
+  color: #047857;
+}
+
+.levelActive strong,
+.levelActive span,
+.levelActive em {
+  color: #047857;
+}
+
+.inputGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.inputGrid label {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inputGrid span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.inputGrid input {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 800;
+  outline: none;
+}
+
+.inputGrid input:focus {
+  border-color: #0ea5e9;
+  box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.15);
+}
+
+.positionStats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-top: 14px;
+}
+
+.positionStats div {
+  min-width: 0;
+}
+
+.positionStats span,
+.positionStats strong {
+  display: block;
+}
+
+.positionStats strong {
+  margin-top: 3px;
+  font-size: 16px;
+  text-align: left;
+}
+
+.tpRows {
+  margin-top: 14px;
+}
+
+.tpReached {
+  color: #047857;
+}
+
+.tpReached strong,
+.tpReached span,
+.tpReached small,
+.tpReached em {
+  color: #047857;
+}
+
+.tpEmpty {
+  display: grid;
+  place-items: center;
+  min-height: 38px;
+  color: #94a3b8;
+  background: #ffffff;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+@media (max-width: 1180px) {
+  .strategyGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .header {
+    align-items: flex-start;
+    gap: 14px;
+    flex-direction: column;
+  }
+
+  .nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .nav a {
+    flex: 1;
+  }
+
+  .titleRow,
+  .panelTop {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .updatedBox {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .summaryGrid,
+  .panelGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .strategyPanel {
+    padding: 16px;
+  }
+
+  .chartWrap {
+    height: 250px;
+  }
+}
+
+@media (max-width: 520px) {
+  .main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .brand strong {
+    font-size: 16px;
+  }
+
+  .priceLine strong {
+    font-size: 26px;
+  }
+
+  .inputGrid,
+  .positionStats {
+    grid-template-columns: 1fr;
+  }
+}
