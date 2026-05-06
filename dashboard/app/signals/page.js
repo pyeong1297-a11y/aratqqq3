@@ -31,6 +31,40 @@ const EMPTY_POSITIONS = {
 };
 
 const STORAGE_KEY = 'ara_signal_positions_v1';
+const POSITIONS_API = '/api/positions';
+
+function normalizePositions(value) {
+  return {
+    tqqq: { ...EMPTY_POSITIONS.tqqq, ...(value?.tqqq || {}) },
+    bulz: { ...EMPTY_POSITIONS.bulz, ...(value?.bulz || {}) },
+  };
+}
+
+function hasAnyPosition(value) {
+  return Object.values(value || {}).some((position) => position?.entry || position?.shares);
+}
+
+function toServerPosition(strategyKey, position) {
+  return {
+    strategyKey,
+    entryPrice: position?.entry || null,
+    shares: position?.shares || null,
+  };
+}
+
+async function savePositionToServer(strategyKey, position) {
+  await fetch(POSITIONS_API, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(toServerPosition(strategyKey, position)),
+  });
+}
+
+async function clearPositionOnServer(strategyKey) {
+  await fetch(`${POSITIONS_API}?strategy=${encodeURIComponent(strategyKey)}`, {
+    method: 'DELETE',
+  });
+}
 
 function formatCurrency(value, decimals = 2) {
   if (!Number.isFinite(value)) return '-';
@@ -421,20 +455,56 @@ export default function SignalsPage() {
   }, []);
 
   useEffect(() => {
-    loadSignals();
+    const timer = window.setTimeout(() => {
+      loadSignals();
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [loadSignals]);
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setPositions({ ...EMPTY_POSITIONS, ...JSON.parse(saved) });
+    let cancelled = false;
+
+    async function loadPositions() {
+      let nextPositions = normalizePositions(null);
+
+      try {
+        const saved = window.localStorage.getItem(STORAGE_KEY);
+        if (saved) nextPositions = normalizePositions(JSON.parse(saved));
+      } catch {
+        nextPositions = normalizePositions(null);
       }
-    } catch {
-      setPositions(EMPTY_POSITIONS);
-    } finally {
-      setPositionsReady(true);
+
+      if (!cancelled) setPositions(nextPositions);
+
+      try {
+        const response = await fetch(POSITIONS_API, { cache: 'no-store' });
+        if (response.ok) {
+          const payload = await response.json();
+          const remotePositions = normalizePositions(payload.positions);
+
+          if (hasAnyPosition(remotePositions)) {
+            nextPositions = remotePositions;
+            if (!cancelled) setPositions(remotePositions);
+          } else if (hasAnyPosition(nextPositions)) {
+            await Promise.all(
+              Object.entries(nextPositions)
+                .filter(([, position]) => position.entry || position.shares)
+                .map(([strategyKey, position]) => savePositionToServer(strategyKey, position))
+            );
+          }
+        }
+      } catch {
+        // Local storage remains the fallback when D1 is unavailable.
+      } finally {
+        if (!cancelled) setPositionsReady(true);
+      }
     }
+
+    loadPositions();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -455,6 +525,12 @@ export default function SignalsPage() {
         [field]: value,
       },
     }));
+
+    const nextPosition = {
+      ...positions[key],
+      [field]: value,
+    };
+    savePositionToServer(key, nextPosition).catch(() => {});
   };
 
   const clearPosition = (key) => {
@@ -462,6 +538,7 @@ export default function SignalsPage() {
       ...current,
       [key]: { ...EMPTY_POSITIONS[key] },
     }));
+    clearPositionOnServer(key).catch(() => {});
   };
 
   return (
