@@ -405,6 +405,33 @@
   font-weight: 900;
 }
 
+.clearPositionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  margin-left: auto;
+  padding: 0 8px;
+  color: #64748b;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.clearPositionButton:hover:not(:disabled) {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.clearPositionButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .metricRows {
   margin-top: 12px;
 }

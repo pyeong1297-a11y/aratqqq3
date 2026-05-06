@@ -20,6 +20,7 @@ import {
   RefreshCw,
   Target,
   TrendingUp,
+  Trash2,
   WalletCards,
 } from 'lucide-react';
 import styles from './page.module.css';
@@ -227,7 +228,7 @@ function DipRows({ strategy }) {
   );
 }
 
-function PositionPanel({ strategy, position, onPositionChange }) {
+function PositionPanel({ strategy, position, onPositionChange, onPositionClear }) {
   const entry = parseInput(position.entry);
   const shares = parseInput(position.shares);
   const hasEntry = entry > 0 && Number.isFinite(strategy.price);
@@ -256,6 +257,17 @@ function PositionPanel({ strategy, position, onPositionChange }) {
       <div className={styles.positionHeader}>
         <WalletCards size={16} />
         <span>내 포지션</span>
+        <button
+          type="button"
+          className={styles.clearPositionButton}
+          onClick={() => onPositionClear(strategy.key)}
+          disabled={!position.entry && !position.shares}
+          title="포지션 해지"
+          aria-label={`${strategy.symbol} 포지션 해지`}
+        >
+          <Trash2 size={14} />
+          해지
+        </button>
       </div>
 
       <div className={styles.inputGrid}>
@@ -324,7 +336,7 @@ function PositionPanel({ strategy, position, onPositionChange }) {
   );
 }
 
-function StrategyPanel({ strategy, position, onPositionChange }) {
+function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }) {
   return (
     <section className={styles.strategyPanel}>
       <div className={styles.panelTop}>
@@ -363,6 +375,7 @@ function StrategyPanel({ strategy, position, onPositionChange }) {
           strategy={strategy}
           position={position}
           onPositionChange={onPositionChange}
+          onPositionClear={onPositionClear}
         />
       </div>
     </section>
@@ -444,6 +457,13 @@ export default function SignalsPage() {
     }));
   };
 
+  const clearPosition = (key) => {
+    setPositions((current) => ({
+      ...current,
+      [key]: { ...EMPTY_POSITIONS[key] },
+    }));
+  };
+
   return (
     <div className={styles.root}>
       <header className={styles.header}>
@@ -500,6 +520,7 @@ export default function SignalsPage() {
                   strategy={strategy}
                   position={positions[strategy.key] || EMPTY_POSITIONS[strategy.key]}
                   onPositionChange={updatePosition}
+                  onPositionClear={clearPosition}
                 />
               ))}
             </div>

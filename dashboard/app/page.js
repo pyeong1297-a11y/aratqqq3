@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useCallback } from 'react';
 import styles from './page.module.css';
 import {
@@ -533,6 +534,9 @@ export default function Dashboard() {
             <button className={`${styles.tab} ${activeTab === 'compare' ? styles.tabActive : ''}`} onClick={() => setActiveTab('compare')}>
               <Activity size={16}/> ETF 비교
             </button>
+            <Link href="/signals" className={styles.tab}>
+              <TrendingUp size={16}/> Signals
+            </Link>
           </div>
         </header>
 

@@ -397,6 +397,7 @@
   cursor: pointer;
   position: relative;
   transition: color 0.2s;
+  text-decoration: none;
 }
 .tab:hover { color: #0f172a; }
 .tabActive { color: #3b82f6; }
