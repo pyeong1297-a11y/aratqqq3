@@ -325,6 +325,19 @@
   font-weight: 700;
 }
 
+.liveMeta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  color: #0369a1;
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
 .positiveText {
   color: #059669;
 }

@@ -89,6 +89,27 @@ function formatNumber(value, decimals = 1) {
   });
 }
 
+function getMarkPrice(strategy) {
+  return Number.isFinite(strategy.markPrice) ? strategy.markPrice : strategy.price;
+}
+
+function getMarkChange(strategy) {
+  return Number.isFinite(strategy.markChange) ? strategy.markChange : strategy.previousChange;
+}
+
+function formatQuoteTime(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return '';
+  return date.toLocaleString('ko-KR', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function formatMetric(metric) {
   if (metric.type === 'currency') return formatCurrency(metric.value);
   if (metric.type === 'percent') return formatPercent(metric.value, metric.decimals ?? 1, true);
@@ -265,12 +286,13 @@ function DipRows({ strategy }) {
 function PositionPanel({ strategy, position, onPositionChange, onPositionClear }) {
   const entry = parseInput(position.entry);
   const shares = parseInput(position.shares);
-  const hasEntry = entry > 0 && Number.isFinite(strategy.price);
+  const markPrice = getMarkPrice(strategy);
+  const hasEntry = entry > 0 && Number.isFinite(markPrice);
   const hasShares = hasEntry && shares > 0;
-  const gainPct = hasEntry ? strategy.price / entry - 1 : null;
-  const pnlPerShare = hasEntry ? strategy.price - entry : null;
+  const gainPct = hasEntry ? markPrice / entry - 1 : null;
+  const pnlPerShare = hasEntry ? markPrice - entry : null;
   const totalPnl = hasShares ? pnlPerShare * shares : null;
-  const marketValue = hasShares ? strategy.price * shares : null;
+  const marketValue = hasShares ? markPrice * shares : null;
   const tpRows = hasEntry
     ? normalizeTpRules(strategy).map((rule) => {
         const price = entry * (1 + rule.threshold);
@@ -281,7 +303,7 @@ function PositionPanel({ strategy, position, onPositionChange, onPositionClear }
           priceText: formatTpPrice(rule, entry),
           sellText: formatSellRule(rule),
           price,
-          reached: strategy.price >= price,
+          reached: markPrice >= price,
         };
       })
     : [];
@@ -371,6 +393,10 @@ function PositionPanel({ strategy, position, onPositionChange, onPositionClear }
 }
 
 function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }) {
+  const markPrice = getMarkPrice(strategy);
+  const markChange = getMarkChange(strategy);
+  const quoteTime = formatQuoteTime(strategy.liveQuote?.time);
+
   return (
     <section className={styles.strategyPanel}>
       <div className={styles.panelTop}>
@@ -385,11 +411,16 @@ function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }
       </div>
 
       <div className={styles.priceLine}>
-        <strong>{formatCurrency(strategy.price)}</strong>
-        <span className={strategy.previousChange >= 0 ? styles.positiveText : styles.negativeText}>
-          {formatPercent(strategy.previousChange, 2, true)}
+        <strong>{formatCurrency(markPrice)}</strong>
+        <span className={markChange >= 0 ? styles.positiveText : styles.negativeText}>
+          {formatPercent(markChange, 2, true)}
         </span>
-        <em>{strategy.updatedDate}</em>
+        <em>{strategy.markPriceLabel || '종가'} {quoteTime || strategy.updatedDate}</em>
+        {strategy.liveQuote ? (
+          <small className={styles.liveMeta}>
+            기준 종가 {formatCurrency(strategy.price)}
+          </small>
+        ) : null}
       </div>
 
       <SignalChart strategy={strategy} />
@@ -417,6 +448,8 @@ function StrategyPanel({ strategy, position, onPositionChange, onPositionClear }
 }
 
 function SummaryTile({ strategy }) {
+  const markPrice = getMarkPrice(strategy);
+
   return (
     <div className={styles.summaryTile}>
       <div className={styles.summaryIcon}>
@@ -425,7 +458,7 @@ function SummaryTile({ strategy }) {
       <div>
         <span>{strategy.title}</span>
         <strong>{strategy.status.label}</strong>
-        <em>{formatCurrency(strategy.price)} · {strategy.updatedDate}</em>
+        <em>{formatCurrency(markPrice)} · {strategy.markPriceLabel || '종가'}</em>
       </div>
     </div>
   );

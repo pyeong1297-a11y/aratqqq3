@@ -356,9 +356,28 @@ function buildSnowballSignal(tqqqBars, qqqBars) {
   };
 }
 
-export function buildSignalDashboard({ tqqqBars, bulzBars, qqqBars }) {
-  const snowball = buildSnowballSignal(tqqqBars, qqqBars);
-  const bulz = buildBulzSignal(bulzBars);
+function attachLiveQuote(strategy, liveQuote) {
+  if (!liveQuote) {
+    return {
+      ...strategy,
+      markPrice: strategy.price,
+      markChange: strategy.previousChange,
+      markPriceLabel: '종가',
+    };
+  }
+
+  return {
+    ...strategy,
+    liveQuote,
+    markPrice: finiteOrNull(liveQuote.price) ?? strategy.price,
+    markChange: finiteOrNull(liveQuote.changePercent) ?? strategy.previousChange,
+    markPriceLabel: liveQuote.label || '현재가',
+  };
+}
+
+export function buildSignalDashboard({ tqqqBars, bulzBars, qqqBars, liveQuotes = {} }) {
+  const snowball = attachLiveQuote(buildSnowballSignal(tqqqBars, qqqBars), liveQuotes.tqqq);
+  const bulz = attachLiveQuote(buildBulzSignal(bulzBars), liveQuotes.bulz);
 
   return {
     generatedAt: new Date().toISOString(),
