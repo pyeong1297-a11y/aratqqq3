@@ -1,6 +1,5 @@
 import nextWorker from './.open-next/worker.js';
 import { runSignalAlerts } from './lib/alerts/runner.js';
-import { replayBulzTp1Alert } from './lib/alerts/replay.js';
 
 function getNewYorkParts(timestamp) {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -26,19 +25,13 @@ function isMarketCloseCron(controller) {
 const worker = {
   ...nextWorker,
   async scheduled(controller, env, ctx) {
-    let task;
-
-    if (controller.cron === '0 6 * * *') {
-      task = replayBulzTp1Alert({ env, reason: 'scheduled-1500' });
-    } else if (isMarketCloseCron(controller)) {
-      task = runSignalAlerts({ env, scheduledTime: controller.scheduledTime });
-    } else {
-      task = Promise.resolve({
+    const task = isMarketCloseCron(controller)
+      ? runSignalAlerts({ env, scheduledTime: controller.scheduledTime })
+      : Promise.resolve({
         ok: true,
         skipped: true,
         reason: 'Not the New York 16:00 market-close cron.',
       });
-    }
 
     ctx.waitUntil(
       task.catch((err) => {
