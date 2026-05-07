@@ -8,6 +8,9 @@ import {
   insertEventIfNew,
 } from './db.js';
 import { sendTelegramMessage } from './telegram.js';
+import { loadAndSyncData } from '../csvLoader.js';
+import { loadLiveQuotes } from '../live-quotes.js';
+import { buildSignalDashboard } from '../signal-dashboard.js';
 
 const DEFAULT_BASE_URL = 'https://aratqqq3final.pyeong1297.workers.dev';
 
@@ -88,32 +91,16 @@ function isDipActive(strategy, key) {
   return isFiniteNumber(strategy?.qqqPrice) && isFiniteNumber(level?.price) && strategy.qqqPrice <= level.price;
 }
 
-async function fetchSignals(env, preferredBaseUrl = null) {
-  const baseUrls = [preferredBaseUrl, env.SIGNALS_BASE_URL, DEFAULT_BASE_URL]
-    .filter(Boolean)
-    .filter((value, index, values) => values.indexOf(value) === index);
-  const errors = [];
+async function loadSignals(env, preferredBaseUrl = null) {
+  const baseUrl = preferredBaseUrl || env.SIGNALS_BASE_URL || DEFAULT_BASE_URL;
+  const [tqqqBars, bulzBars, qqqBars, liveQuotes] = await Promise.all([
+    loadAndSyncData('tqqq', { baseUrl }),
+    loadAndSyncData('bulz', { baseUrl }),
+    loadAndSyncData('qqq', { baseUrl }),
+    loadLiveQuotes(['TQQQ', 'BULZ', 'QQQ']),
+  ]);
 
-  for (const baseUrl of baseUrls) {
-    const url = new URL('/api/signals', baseUrl).toString();
-
-    try {
-      const response = await fetch(url, {
-        headers: { Accept: 'application/json' },
-        cf: { cacheTtl: 0, cacheEverything: false },
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-
-      errors.push(`${url} -> ${response.status}`);
-    } catch (err) {
-      errors.push(`${url} -> ${err.message}`);
-    }
-  }
-
-  throw new Error(`Signal API failed: ${errors.join(', ')}`);
+  return buildSignalDashboard({ tqqqBars, bulzBars, qqqBars, liveQuotes });
 }
 
 async function emitAlert(ctx, event) {
@@ -422,7 +409,7 @@ export async function runSignalAlerts({ env, baseUrl = null }) {
   }
 
   const [signals, positions] = await Promise.all([
-    fetchSignals(env, baseUrl),
+    loadSignals(env, baseUrl),
     getActivePositionsMap(env.DB),
   ]);
 
