@@ -20,5 +20,12 @@
   },
   "vars": {
     "SIGNALS_BASE_URL": "https://aratqqq3final.pyeong1297.workers.dev"
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ara-signals-db",
+      "database_id": "6bc6f09b-c330-463e-91ba-23e6c04e2d7d"
+    }
+  ]
 }
