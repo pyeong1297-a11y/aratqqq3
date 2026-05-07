@@ -649,6 +649,7 @@ export default function SignalsPage() {
   const [error, setError] = useState('');
   const [positions, setPositions] = useState(EMPTY_POSITIONS);
   const [positionsReady, setPositionsReady] = useState(false);
+  const [positionSync, setPositionSync] = useState({ label: '포지션 확인 중', tone: 'watch' });
   const [tradeRecords, setTradeRecords] = useState([]);
 
   const loadSignals = useCallback(async () => {
@@ -713,17 +714,27 @@ export default function SignalsPage() {
 
           if (hasAnyPosition(remotePositions)) {
             nextPositions = remotePositions;
-            if (!cancelled) setPositions(remotePositions);
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(remotePositions));
+            if (!cancelled) {
+              setPositions(remotePositions);
+              setPositionSync({ label: 'DB 포지션 동기화됨', tone: 'positive' });
+            }
           } else if (hasAnyPosition(nextPositions)) {
             await Promise.all(
               Object.entries(nextPositions)
                 .filter(([, position]) => position.entry || position.shares)
                 .map(([strategyKey, position]) => savePositionToServer(strategyKey, position))
             );
+            if (!cancelled) setPositionSync({ label: '로컬 포지션 DB 저장됨', tone: 'positive' });
+          } else if (!cancelled) {
+            setPositionSync({ label: 'DB 포지션 없음', tone: 'neutral' });
           }
+        } else if (!cancelled) {
+          setPositionSync({ label: '로컬 포지션 사용 중', tone: 'watch' });
         }
       } catch {
         // Local storage remains the fallback when D1 is unavailable.
+        if (!cancelled) setPositionSync({ label: '로컬 포지션 사용 중', tone: 'watch' });
       } finally {
         if (!cancelled) setPositionsReady(true);
       }
@@ -755,10 +766,13 @@ export default function SignalsPage() {
     }));
 
     const nextPosition = {
-      ...positions[key],
+      ...(positions[key] || EMPTY_POSITIONS[key]),
       [field]: value,
     };
-    savePositionToServer(key, nextPosition).catch(() => {});
+    setPositionSync({ label: '포지션 저장 중', tone: 'watch' });
+    savePositionToServer(key, nextPosition)
+      .then(() => setPositionSync({ label: 'DB 저장됨', tone: 'positive' }))
+      .catch(() => setPositionSync({ label: '로컬 저장됨', tone: 'watch' }));
   };
 
   const clearPosition = (key) => {
@@ -766,7 +780,10 @@ export default function SignalsPage() {
       ...current,
       [key]: { ...EMPTY_POSITIONS[key] },
     }));
-    clearPositionOnServer(key).catch(() => {});
+    setPositionSync({ label: '포지션 해지 중', tone: 'watch' });
+    clearPositionOnServer(key)
+      .then(() => setPositionSync({ label: 'DB 저장됨', tone: 'positive' }))
+      .catch(() => setPositionSync({ label: '로컬 저장됨', tone: 'watch' }));
   };
 
   const recordTakeProfit = async (key, payload) => {
@@ -812,6 +829,10 @@ export default function SignalsPage() {
           <div className={styles.updatedBox}>
             <Clock3 size={16} />
             <span>{data?.generatedAt ? new Date(data.generatedAt).toLocaleString('ko-KR') : '-'}</span>
+          </div>
+          <div className={`${styles.syncBox} ${styles[`sync_${positionSync.tone}`]}`}>
+            <WalletCards size={16} />
+            <span>{positionSync.label}</span>
           </div>
         </section>
 

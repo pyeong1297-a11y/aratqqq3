@@ -88,19 +88,32 @@ function isDipActive(strategy, key) {
   return isFiniteNumber(strategy?.qqqPrice) && isFiniteNumber(level?.price) && strategy.qqqPrice <= level.price;
 }
 
-async function fetchSignals(env) {
-  const baseUrl = env.SIGNALS_BASE_URL || DEFAULT_BASE_URL;
-  const url = new URL('/api/signals', baseUrl).toString();
-  const response = await fetch(url, {
-    headers: { Accept: 'application/json' },
-    cf: { cacheTtl: 0, cacheEverything: false },
-  });
+async function fetchSignals(env, preferredBaseUrl = null) {
+  const baseUrls = [preferredBaseUrl, env.SIGNALS_BASE_URL, DEFAULT_BASE_URL]
+    .filter(Boolean)
+    .filter((value, index, values) => values.indexOf(value) === index);
+  const errors = [];
 
-  if (!response.ok) {
-    throw new Error(`Signal API failed: ${response.status}`);
+  for (const baseUrl of baseUrls) {
+    const url = new URL('/api/signals', baseUrl).toString();
+
+    try {
+      const response = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        cf: { cacheTtl: 0, cacheEverything: false },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      }
+
+      errors.push(`${url} -> ${response.status}`);
+    } catch (err) {
+      errors.push(`${url} -> ${err.message}`);
+    }
   }
 
-  return await response.json();
+  throw new Error(`Signal API failed: ${errors.join(', ')}`);
 }
 
 async function emitAlert(ctx, event) {
@@ -403,13 +416,13 @@ async function processTqqq(ctx, strategy, position) {
   return events;
 }
 
-export async function runSignalAlerts({ env }) {
+export async function runSignalAlerts({ env, baseUrl = null }) {
   if (!env?.DB) {
     throw new Error('D1 DB binding is missing. Connect a D1 database with binding name DB.');
   }
 
   const [signals, positions] = await Promise.all([
-    fetchSignals(env),
+    fetchSignals(env, baseUrl),
     getActivePositionsMap(env.DB),
   ]);
 

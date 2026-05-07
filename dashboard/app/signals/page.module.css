@@ -136,7 +136,8 @@
   font-weight: 600;
 }
 
-.updatedBox {
+.updatedBox,
+.syncBox {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -149,10 +150,42 @@
   white-space: nowrap;
 }
 
-.updatedBox span {
+.updatedBox span,
+.syncBox span {
   color: #475569;
   text-transform: none;
   letter-spacing: 0;
+}
+
+.syncBox {
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sync_positive {
+  color: #047857;
+  background: #d1fae5;
+  border-color: #a7f3d0;
+}
+
+.sync_positive span {
+  color: #047857;
+}
+
+.sync_watch {
+  color: #a16207;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.sync_watch span {
+  color: #a16207;
+}
+
+.sync_neutral {
+  color: #475569;
+  background: #ffffff;
+  border-color: #e2e8f0;
 }
 
 .errorBox,
@@ -790,7 +823,8 @@
     flex-direction: column;
   }
 
-  .updatedBox {
+  .updatedBox,
+  .syncBox {
     width: 100%;
     justify-content: center;
   }

@@ -25,7 +25,7 @@ export async function GET(req) {
       return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 });
     }
 
-    const result = await runSignalAlerts({ env });
+    const result = await runSignalAlerts({ env, baseUrl: new URL(req.url).origin });
     return NextResponse.json(result);
   } catch (err) {
     console.error('[alerts:run]', err);
