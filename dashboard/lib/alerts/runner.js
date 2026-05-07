@@ -3,6 +3,7 @@ import {
   createCycle,
   getActivePositionsMap,
   getOpenCycle,
+  hasAlertLog,
   insertAlertLog,
   insertEventIfNew,
 } from './db.js';
@@ -104,7 +105,9 @@ async function fetchSignals(env) {
 
 async function emitAlert(ctx, event) {
   const inserted = await insertEventIfNew(ctx.db, event);
-  if (!inserted) {
+  const alreadySent = inserted ? false : await hasAlertLog(ctx.db, event.eventKey);
+
+  if (!inserted && alreadySent) {
     return { eventType: event.eventType, sent: false, skipped: true };
   }
 

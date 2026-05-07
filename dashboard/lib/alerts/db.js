@@ -305,6 +305,18 @@ export async function insertAlertLog(db, alert) {
   ).run();
 }
 
+export async function hasAlertLog(db, alertKey) {
+  await ensureSchema(db);
+  const row = await db.prepare(
+    `SELECT alert_key
+     FROM alert_logs
+     WHERE alert_key = ?
+     LIMIT 1`
+  ).bind(alertKey).first();
+
+  return Boolean(row?.alert_key);
+}
+
 function positiveOrNull(value) {
   return Number.isFinite(value) && value > 0 ? value : null;
 }
